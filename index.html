@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="index">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RAG 知识体系：从原理到评估 · RAG 知识体系</title>
+<meta name="description" content="一条把 RAG 从头串到尾的路径。<b>先讲为什么需要它</b>，再按「离线索引 → 在线问答 → 进阶优化 → 图谱 → 智能体 → 评估">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">00</span><span>开始</span><span>·</span><span>READ ME FIRST</span></div>
+    <h1>RAG 知识体系：从原理到评估</h1>
+    <p class="lede">一条把 RAG 从头串到尾的路径。<b>先讲为什么需要它</b>，再按「离线索引 → 在线问答 → 进阶优化 → 图谱 → 智能体 → 评估」六段展开，每一页都标明它在链路上的位置。</p>
+    <div class="meta-row">
+      <span class="pill acc">22 页 · 约 6 小时</span>
+      <span class="pill">不需前置知识</span>
+      <span class="pill">含 63 道自测</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>全课地图 · 从这里开始</span></div>
+      <div><b>不学卡在哪</b><span>不知道从哪里读起，或者读了一堆碎片却串不起来。</span></div>
+      <div><b>它解决什么</b><span>给出三条不同基础的学习路径，以及每一页在整条链路上的位置。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>读 RAG 的三个断点</h2>
+  <div class="sec">
+    <p>RAG 的资料很多，但大多数在犯同一个毛病：<b>把术语当已知</b>。一上来就是「混合检索 + 重排」，却不解释为什么单靠向量不够。</p>    <p>这套课假设你<b>从零开始</b>，先补三个最容易断的地方：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:26%">断点</th><th style="width:44%">表现</th><th style="width:30%">在哪一页补</th></tr></thead>
+      <tbody>
+        <tr><td><b>不知道为什么要 RAG</b></td><td>以为只是「给模型加知识库」，说不清和微调的分工</td><td>0.1、0.2</td></tr>
+        <tr><td><b>不知道优化手段该往哪放</b></td><td>听说过 HyDE、RAG Fusion、Rerank，但不知道各自修什么病</td><td>07、08、09</td></tr>
+        <tr><td><b>不知道效果到底好不好</b></td><td>改完凭感觉，说不清是变好了还是变差了</td><td>15、16</td></tr>
+      </tbody>
+    </table></div>    <p>对应的做法是：<b>每个概念先讲「它解决什么问题」，再讲「怎么实现」</b>；每一页都标明它在整条链路（解析 → 分块 → 向量化 → 入库 → 检索 → 增强 → 生成）上的位置。</p>
+  </div>
+
+  <h2><span class="n">2</span>三种学法</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:28%">你的情况</th><th style="width:50%">建议路线</th><th style="width:22%">用时</th></tr></thead>
+      <tbody>
+        <tr><td><b>完全没接触过 RAG</b><br><span style="font-size:12px">但知道大模型是什么</span></td><td><b>按 0.1 → 16 顺序全读</b>。第零幕五页不要跳，它们建立了后面所有优化的判断依据。07–09 是进阶三连，建议连读。</td><td><span style="font-family:var(--mono)">6 小时</span></td></tr>
+        <tr><td><b>做过简单 RAG</b><br><span style="font-size:12px">跑通过向量库，效果一般</span></td><td>0.1–0.5 可跳（0.4 向量、0.5 分块值得扫一眼）→ <b>07、08、09 精读</b> → 10、11、12 按需 → <b>15、16 必读</b>。</td><td><span style="font-family:var(--mono)">3 小时</span></td></tr>
+        <tr><td><b>只想搞懂架构</b><br><span style="font-size:12px">不关心调参细节</span></td><td>0.3 → 07 → 08 → 11 → 12 → 13 → 15，七页看完能画出完整架构图并说清各环节的取舍。</td><td><span style="font-family:var(--mono)">2 小时</span></td></tr>
+      </tbody>
+    </table></div><style>@media(max-width:640px){.tb-stack td:nth-child(3)::before{content:"约 "}}</style>
+  </div>
+
+  <h2><span class="n">3</span>六个部分，对应一条链路</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:26%">部分</th><th style="width:24%">对应环节</th><th style="width:50%">解决的问题</th></tr></thead>
+      <tbody>
+        <tr><td><b>第零幕</b>（0.1–0.5）</td><td>全景</td><td>为什么需要 RAG、它和微调的分工、整条链的样子、向量与分块的直觉</td></tr>
+        <tr><td><b>第一部分</b>（01–03）</td><td>离线索引</td><td>怎么把杂乱的文件变成「好查」的知识库</td></tr>
+        <tr><td><b>第二部分</b>（04–06）</td><td>在线问答</td><td>怎么把资料「用对」：检索、拼提示、生成</td></tr>
+        <tr><td><b>第三部分</b>（07–10）</td><td>三个环节的优化</td><td>朴素方案不够用时的系统性补强</td></tr>
+        <tr><td><b>第四部分</b>（11–12）</td><td>换数据结构</td><td>跨越文档的全局性、多跳、关系型问题</td></tr>
+        <tr><td><b>第五部分</b>（13–14）</td><td>换控制流</td><td>让系统自己决定查什么、查几次</td></tr>
+        <tr><td><b>第六部分</b>（15–16）</td><td>横切</td><td>判断问题出在检索还是生成</td></tr>
+      </tbody>
+    </table></div>    <p><b>建议先读第零幕再跳任何地方</b>：后面每一页都会用到 0.4（向量）和 0.5（分块）建立的概念，跳过之后读到「MMR」「父子索引」会缺少参照物。</p>
+  </div>
+
+  <h2><span class="n">4</span>全部页面</h2>
+  <div class="sec">
+<div class="idx-grid"><a href="r01-why.html"><b>0.1</b><span>大模型的三个死穴</span></a><a href="r02-vs.html"><b>0.2</b><span>微调与 RAG：闭卷考与开卷考</span></a><a href="r03-loop.html"><b>0.3</b><span>一个 RAG 系统的最小闭环</span></a><a href="r04-vector.html"><b>0.4</b><span>向量：让「意思」变成距离</span></a><a href="r05-chunk.html"><b>0.5</b><span>分块：为什么要切碎</span></a><a href="r06-etl.html"><b>01</b><span>数据解析与清洗</span></a><a href="r07-chunk2.html"><b>02</b><span>分块策略的取舍</span></a><a href="r08-index.html"><b>03</b><span>向量库与索引结构</span></a><a href="r09-retrieve.html"><b>04</b><span>检索：从问题到 Top-K</span></a><a href="r10-prompt.html"><b>05</b><span>增强：提示词怎么拼</span></a><a href="r11-gen.html"><b>06</b><span>生成：约束与引用</span></a><a href="r12-pre.html"><b>07</b><span>检索前：改写、拆解、HyDE</span></a><a href="r13-mid.html"><b>08</b><span>检索中：混合检索与融合</span></a><a href="r14-post.html"><b>09</b><span>检索后：重排与压缩</span></a><a href="r15-self.html"><b>10</b><span>Self-RAG</span></a><a href="r16-limit.html"><b>11</b><span>碎片化的天花板</span></a><a href="r17-graph.html"><b>12</b><span>知识图谱怎么建、怎么用</span></a><a href="r18-route.html"><b>13</b><span>从流水线到智能体</span></a><a href="r19-reflect.html"><b>14</b><span>自我反思与多轮检索</span></a><a href="r20-tri.html"><b>15</b><span>评估铁三角</span></a><a href="r21-measure.html"><b>16</b><span>怎么测：数据集与裁判</span></a><a href="r22-glossary.html"><b>A</b><span>术语表</span></a></div>
+  </div>
+
+  <h2><span class="n">5</span>这份材料的来源</h2>
+  <div class="sec">
+    <p>内容由两部分合成：</p>    <ul>
+      <li><b>一条 30 分钟的 RAG 串讲视频稿</b>——提供了骨架与大部分类比（闭卷/开卷、贴瓷砖式的 overlap、假答案找真答案、从抄书书呆子到侦探）。</li>
+      <li><b>本地语雀题库中的 RAG 专题</b>——原文 PDF 三十余篇，其中面试题类十篇为文本版，用于校对术语、补充优化手段清单（17 种策略、Self-RAG 的反思标记、RAGAS 指标等）。</li>
+    </ul>    <p>视频稿负责「讲得懂」，题库负责「讲得准」。两者冲突时以后者为准，个别地方我标注了原文的出入（例如部分资料把「重排」与「二次检索」混用，本课按前者的定义讲）。</p>    <div class="note"><p>这份课不含代码实现。它解决的是「知道每一步在做什么、为什么这么做、什么情况下会失效」，具体用什么库、怎么调参，取决于你的数据——那是拿到评估集之后才能定的事。</p></div>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>RAG 只有两条线：离线建库与在线问答，评估横切全链路。</li>
+      <li>先读第零幕：后面所有优化都建立在「向量」「分块」这两个直觉上。</li>
+      <li>遇到效果问题，先按 15、16 页的指标定位，再决定改哪一环。</li>
+    </ol>
+  </div>
+
+  <div class="cite">
+    <b>资料出处</b>
+    视频串讲稿 + 语雀题库 RAG 专题（PDF 原文）。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

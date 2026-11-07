@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="gen">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>生成：约束与引用 · RAG 知识体系</title>
+<meta name="description" content="资料给对了，模型仍可能读错、过度概括或悄悄补上自己的知识。这一页讲怎么让答案既准确又可核查。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">06</span><span>第二部分 · 在线问答</span><span>·</span><span>GENERATE</span></div>
+    <h1>生成：约束与引用</h1>
+    <p class="lede">资料给对了，模型仍可能读错、过度概括或悄悄补上自己的知识。这一页讲怎么让答案既准确又可核查。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：05 增强</span>
+      <span class="pill">读完接：07 检索前优化</span>
+      <span class="pill">约 <b>15</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>在线第 3 步 · 生成</span></div>
+      <div><b>不学卡在哪</b><span>只关心「有没有答出来」，不关心「答的是不是资料里的」，线上出现无法追责的错误答案。</span></div>
+      <div><b>它解决什么</b><span>能把答案约束在资料范围内，并让每个结论都可点开原文核实。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>资料对，答案也可能错</h2>
+  <div class="sec">
+    <p>很多人以为「把正确资料给模型，它自然能答对」。实际有三类失败：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:16%">类型</th><th style="width:40%">表现</th><th style="width:44%">例子</th></tr></thead>
+      <tbody>
+        <tr><td><b>误读</b></td><td>资料说的是 A，模型理解成 B</td><td>资料写「一线城市 500 元（含税）」，模型答「500 元，不含税」</td></tr>
+        <tr><td><b>过度概括</b></td><td>把有条件的结论说成无条件的</td><td>资料写「连续出差超过 7 天可申请补贴」，模型答「出差可以申请补贴」</td></tr>
+        <tr><td><b>夹带私货</b></td><td>资料里没有的内容，用模型自己的知识补上</td><td>资料只说住宿标准，模型顺手补了一句「交通费按实际报销」</td></tr>
+      </tbody>
+    </table></div>    <p>三类里第三类最常见，也最难查——因为补上的那句往往「听起来很合理」，用户不会怀疑。这也是为什么约束句里那句「不要引入资料之外的知识」不能省。</p>
+  </div>
+
+  <h2><span class="n">2</span>让答案可核查的三个动作</h2>
+  <div class="sec">
+    <ol>
+      <li><b>要求标注编号</b>：每句结论后面加 <code>[1]</code>，指出依据哪条资料。</li>
+      <li><b>返回结构化引用</b>：不只是编号，还返回文件名、页码、原文片段，前端可展开。</li>
+      <li><b>给出置信提示</b>：当资料覆盖不完整时，明确说明「以下内容部分基于推断」。</li>
+    </ol>    <p>第二条是关键。如果只给编号而用户点不开，溯源就是形式主义。正确的实现是<b>前端展示原文片段并高亮命中的句子</b>——用户能一眼确认「这句话确实来自这里」。</p>
+  </div>
+
+  <h2><span class="n">3</span>拒答不是失败</h2>
+  <div class="sec">
+    <p>系统里应该有一个明确的状态：<b>「知识库中没有找到相关内容」</b>。它和「找到了但答错」相比是更好的结果——至少用户知道该换个问法或找人工。</p>    <p>要让它真正生效，需要三处配合：</p>    <ul>
+      <li>检索侧：相似度阈值过滤（04 页）；</li>
+      <li>提示侧：明确的拒答指令（05 页）；</li>
+      <li>评估侧：把「该拒答时是否拒答」当成一个指标来衡量（15 页）。</li>
+    </ul>    <p>三者缺一，拒答就会退化成「模型随机发挥」。</p>
+  </div>
+
+  <h2><span class="n">4</span>参数设置：把随机性压下去</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:22%">参数</th><th style="width:26%">建议</th><th style="width:52%">原因</th></tr></thead>
+      <tbody>
+        <tr><td>temperature</td><td>0 – 0.2</td><td>知识问答要稳定复现，不需要创造性</td></tr>
+        <tr><td>top_p</td><td>0.9 左右</td><td>配合低温度，进一步收窄采样范围</td></tr>
+        <tr><td>max_tokens</td><td>按场景设上限</td><td>防止模型展开长篇大论，稀释重点</td></tr>
+        <tr><td>stop</td><td>可设终止符</td><td>结构化输出时防止多余内容</td></tr>
+      </tbody>
+    </table></div>    <p>有人担心低温度会让答案「死板」。在 RAG 场景里这不是缺点——用户要的是<b>准确的复述与归纳</b>，不是文采。需要多样化表达时，可以让模型在「已确定的答案」基础上做润色，而不是在生成阶段放开随机性。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>生成阶段的错误有三类：误读、过度概括、夹带私货，第三类最难察觉。</li>
+      <li>可核查要让用户能点开原始片段，而不只是给一个编号。</li>
+      <li>「知识库中没有相关内容」是合法结果，需要检索、提示、评估三处配合才能生效。</li>
+      <li>知识问答场景温度应压到 0–0.2，稳定性比创造性重要。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>「夹带私货」为什么最难被发现？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>因为它总是很长</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>因为补上的内容通常听起来合理，用户没有理由怀疑</span></button>
+        <button class="opt"><i>C</i><span>因为它一定会和资料冲突</span></button>
+      </div>
+      <div class="ex">模型补的是「常识层面正确但资料里没有」的内容，比如顺手补上交通费规则。用户看到的是通顺且部分正确的答案，很难意识到其中有一句没有依据。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>只返回引用编号、不返回原文片段，问题在哪？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>编号会占用 token</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>用户无法核实，溯源变成形式主义</span></button>
+        <button class="opt"><i>C</i><span>模型会拒绝输出编号</span></button>
+      </div>
+      <div class="ex">溯源的目的是让人能验证。如果编号点不开、看不到原文，用户只能选择相信，这和没有引用区别不大。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>RAG 问答场景为什么建议 temperature 设为 0–0.2？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>为了让回答更短</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>知识问答需要稳定复现，随机性会带来不确定的偏差</span></button>
+        <button class="opt"><i>C</i><span>低温能降低 token 成本</span></button>
+      </div>
+      <div class="ex">同一个问题、同一批资料，用户期望得到同一个答案。高温会让模型在资料边缘「自由发挥」，而这种发挥在知识场景里通常是负面的。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    生成阶段的失败模式参考语雀《RAG 关键痛点和解决方案》；引用与可溯源的做法见《RAG 系统的高级优化工程》。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

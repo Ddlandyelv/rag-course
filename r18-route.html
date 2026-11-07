@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="route">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>从流水线到智能体 · RAG 知识体系</title>
+<meta name="description" content="前面十几页都在优化一条固定的链。这一页换个思路：把链交给一个会判断的智能体，让知识库变成它手里的工具之一。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">13</span><span>第五部分 · Agentic RAG</span><span>·</span><span>AGENTIC</span></div>
+    <h1>从流水线到智能体</h1>
+    <p class="lede">前面十几页都在优化一条固定的链。这一页换个思路：把链交给一个会判断的智能体，让知识库变成它手里的工具之一。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：12 Knowledge Graph</span>
+      <span class="pill">读完接：14 自我反思</span>
+      <span class="pill">约 <b>16</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>Agentic RAG · 控制流</span></div>
+      <div><b>不学卡在哪</b><span>所有请求都走同一条流水线，闲聊被塞资料、新闻查内部库，效果和成本都吃亏。</span></div>
+      <div><b>它解决什么</b><span>理解「控制流交给模型」的收益与代价，会用路由和工具描述约束它的行为。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>流水线的局限：一条路走到黑</h2>
+  <div class="sec">
+    <p>前面所有优化，都还是在一条<b>固定顺序</b>的流水线上：改写 → 检索 → 重排 → 生成。无论什么问题，都走同一遍。</p>    <p>但真实请求的类型差别很大：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:20%">请求</th><th style="width:30%">理想处理</th><th style="width:50%">流水线实际做的</th></tr></thead>
+      <tbody>
+        <tr><td>「你好」</td><td>直接回复</td><td>改写、检索、重排，塞进 3 段无关资料</td></tr>
+        <tr><td>「报销标准是多少」</td><td>查规章制度库</td><td>照做（但如果库里有多个来源，无法切换）</td></tr>
+        <tr><td>「今天行业有什么新闻」</td><td>调联网搜索</td><td>去查内部知识库，找不到</td></tr>
+        <tr><td>「帮我算一下这个公式」</td><td>调计算器</td><td>去查知识库，答不出</td></tr>
+      </tbody>
+    </table></div>    <p>问题不在某一环做得不好，而在<b>整条链没有「判断」这一步</b>。Agentic RAG 的做法是把这条链交给一个能决策的智能体。</p>
+  </div>
+
+  <h2><span class="n">2</span>把 RAG 变成 Agent 手里的一个工具</h2>
+  <div class="sec">
+    <p>核心转变只有一句话：<b>知识库不再是流程的一部分，而是智能体可以调用的一个工具</b>。</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:14%"></th><th style="width:43%">传统 RAG</th><th style="width:43%">Agentic RAG</th></tr></thead>
+      <tbody>
+        <tr><td>流程</td><td>固定：问题 → 检索 → 生成</td><td>动态：模型自己决定调什么、调几次</td></tr>
+        <tr><td>知识源</td><td>一个向量库</td><td>多个工具：知识库、搜索引擎、数据库、计算器、API</td></tr>
+        <tr><td>控制者</td><td>代码（if/else）</td><td>模型（推理与选择）</td></tr>
+        <tr><td>失败处理</td><td>无（一次不成就答错）</td><td>可以换关键词重试、换数据源</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <h2><span class="n">3</span>Routing：先判断该走哪条路</h2>
+  <div class="sec">
+    <p>最常见也最容易落地的一步是<b>路由</b>：让模型（或一个小的分类器）判断请求类型，再分发到不同的处理路径。</p>    <div class="flow"><div class="fn"><b>用户输入</b></div><div class="fn"><b>路由判断</b>意图分类</div><div class="fn"><b>知识库</b>制度/产品问答</div><div class="fn"><b>联网搜索</b>实时信息</div><div class="fn"><b>直接回复</b>闲聊/常识</div></div>    <p>三条路径的差异很大：</p>    <ul>
+      <li><b>知识库</b>：需要检索 + 引用；</li>
+      <li><b>联网搜索</b>：需要工具调用 + 结果清洗；</li>
+      <li><b>直接回复</b>：不检索，直接生成。</li>
+    </ul>    <p>路由的价值不只是「不浪费检索」，更在于<b>避免用错数据源</b>——拿内部制度库去回答「今天有什么新闻」，只会得到一个过时的、看起来很像答案的错误回答。</p>    <div class="note"><p>实现上不一定要用大模型：如果意图类别固定且样本充足，一个小的分类模型（甚至关键词规则）更快更稳。<b>能用规则解决的不要上模型</b>，这是工程上的省钱原则。</p></div>
+  </div>
+
+  <h2><span class="n">4</span>工具设计：比「让模型自由发挥」更重要</h2>
+  <div class="sec">
+    <p>Agentic RAG 的效果，很大程度上取决于<b>工具怎么描述</b>。模型靠工具的名称和说明来决定调用谁，说明写得含糊，它就会乱调。</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:34%">写法</th><th style="width:66%">效果</th></tr></thead>
+      <tbody>
+        <tr><td><code>search(query)</code></td><td>太笼统，模型不知道搜什么、什么时候该搜</td></tr>
+        <tr><td><code>search_internal_docs(query, dept?)</code><br>「检索公司内部制度与产品文档。适用于关于公司规定、流程、产品参数的问题。」</td><td><b>好</b>：说明了范围与适用场景</td></tr>
+      </tbody>
+    </table></div>    <p>同样重要的是<b>失败反馈</b>：工具返回「没有找到」时，要把这句话如实传回给模型，而不是返回空字符串。模型看到「未找到」才会考虑换关键词或换工具；看到空字符串只会继续瞎猜。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>流水线的问题不是某一步差，而是没有「判断」，所有请求走同一条路。</li>
+      <li>Agentic RAG 把知识库降级为工具之一，由模型决定调什么、调几次。</li>
+      <li>路由是最容易落地的一步，价值在于避免用错数据源，而不只是省检索。</li>
+      <li>工具的名称与说明决定了模型会不会正确调用；失败信息要如实回传。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>Agentic RAG 与传统 RAG 最本质的差别是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>用了更大的模型</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>控制流从「代码写死」变成「模型动态决定」</span></button>
+        <button class="opt"><i>C</i><span>向量库换成了图数据库</span></button>
+      </div>
+      <div class="ex">传统 RAG 的顺序由代码决定，Agentic RAG 的顺序由模型推理决定。这带来灵活性（能重试、能换源），也带来不确定性（行为和成本更难预测）。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>路由模块最容易见效的价值是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>减少一次嵌入计算</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>避免用错误的数据源回答（如拿内部制度库答新闻）</span></button>
+        <button class="opt"><i>C</i><span>让回答更长</span></button>
+      </div>
+      <div class="ex">省一次检索是次要收益。主要收益是「不该查库的时候别查」——用错数据源会产出一个看似合理、实际完全无关的答案，比答不出来更糟。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>工具返回「未找到」时，为什么要如实回传这句话？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>为了日志好看</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>模型看到「未找到」才会考虑换关键词或换工具，返回空字符串它只会继续瞎猜</span></button>
+        <button class="opt"><i>C</i><span>为了减少 token</span></button>
+      </div>
+      <div class="ex">这是 Agent 设计里的通用原则：错误信息是给模型的输入，不是给日志的。含糊的失败信号会让模型误以为「查到了但内容为空」。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    Agent 与 RAG 的结合方式参考语雀《从传统 RAG 到 Agentic RAG 的进阶优化》《AI Agent 智能体》《Agents 最佳实践指南》。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

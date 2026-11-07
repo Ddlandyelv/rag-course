@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="etl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>数据解析与清洗 · RAG 知识体系</title>
+<meta name="description" content="RAG 的失败有一半发生在资料进系统之前。这一页讲五种常见格式各自的坑，以及为什么表格最麻烦、元数据为什么必须在这一步就带上。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">01</span><span>第一部分 · 离线索引</span><span>·</span><span>PARSE</span></div>
+    <h1>数据解析与清洗</h1>
+    <p class="lede">RAG 的失败有一半发生在资料进系统之前。这一页讲五种常见格式各自的坑，以及为什么表格最麻烦、元数据为什么必须在这一步就带上。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：0.3 最小闭环</span>
+      <span class="pill">读完接：02 分块策略</span>
+      <span class="pill">约 <b>15</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>离线第 1 步 · 解析与清洗</span></div>
+      <div><b>不学卡在哪</b><span>把「解析」当成一个无足轻重的脚本，结果知识库里全是断行、乱码和拍平的表格。</span></div>
+      <div><b>它解决什么</b><span>知道每种格式的典型失败模式和最低限度的自检方法，避免静默产出垃圾知识库。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>这一步决定天花板</h2>
+  <div class="sec">
+    <p>RAG 的整条链路里，只有这一步是<b>不可逆</b>的：解析漏掉的内容，后面任何环节都找不回来。分块切错了可以重切，向量模型选错了可以重跑，但原始文档里的表格如果被拍平成一行乱码，那就是永久损失。</p>    <p>但这一步在项目里往往最不被重视——因为它「不智能」，看起来只是写几个脚本。实际上大部分效果不佳的 RAG 系统，问题都在这里。</p>    <div class="note"><p>一个实用的自检动作：解析完成后<b>随机抽 20 段</b>人眼过一遍，看有没有断行错乱、表格串行、页眉混进正文。这一步花 20 分钟，能省后面两周的排查。</p></div>
+  </div>
+
+  <h2><span class="n">2</span>五种格式，五种坑</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:16%">格式</th><th style="width:40%">典型问题</th><th style="width:44%">应对</th></tr></thead>
+      <tbody>
+        <tr><td><b>PDF（文本型）</b></td><td>双栏排版被读成一行、跨页表格断裂、脚注混入正文</td><td>用带版面分析的解析器（如 PyMuPDF + layout 分析），不要用最简单的文本抽取</td></tr>
+        <tr><td><b>PDF（扫描型）</b></td><td>整页是图片，直接抽取得到空文本</td><td>必须走 OCR；先检测「每页字符数是否异常低」，避免静默产出空知识库</td></tr>
+        <tr><td><b>Word / HTML</b></td><td>样式被带进来、导航栏和页脚混入正文</td><td>按 DOM 结构或样式名过滤，只取正文容器</td></tr>
+        <tr><td><b>Excel / 表格</b></td><td>二维结构被拍平成一串字符串，行列关系丢失</td><td>按行转成「列名: 值」的键值文本，或整表保留为结构化块</td></tr>
+        <tr><td><b>图片</b></td><td>图里的文字、图表趋势无法检索</td><td>OCR 取文字；图表用多模态模型生成描述再入库</td></tr>
+      </tbody>
+    </table></div>    <p>表格是公认最难的一类。<b>一张 10 行 6 列的表，拍平后可能就是 60 个孤立数字</b>，检索到也没法用。稳妥的做法是：把每一行转成「字段名 + 值」的自解释文本，例如 <code>产品:A-102 | 材质:不锈钢 | 耐压:1.6MPa</code>，这样每一行都能独立被检索、独立被理解。</p>
+  </div>
+
+  <h2><span class="n">3</span>清洗：清什么，别清什么</h2>
+  <div class="sec">
+    <p>清洗的目标是去掉<b>与内容无关的噪声</b>，不是把文本变漂亮。常见的清洗项：</p>    <ul>
+      <li>页眉、页脚、页码、水印；</li>
+      <li>重复的导航文字（「上一篇 / 下一篇 / 返回首页」）；</li>
+      <li>乱码与不可见字符（<code>\u200b</code>、异常换行）；</li>
+      <li>广告语、版权声明（视场景）；</li>
+      <li>连续空行、多余空格。</li>
+    </ul>    <p>但有两类东西<b>不能清</b>：</p>    <ul>
+      <li><b>标题层级</b>。它是最廉价的分块依据，清掉之后只能靠字符数硬切；</li>
+      <li><b>表格与列表的结构标记</b>。清成纯文本会让「哪一行对应哪一列」彻底丢失。</li>
+    </ul>    <p>还有一个容易被忽略的点：<b>保留元数据</b>。来源文件名、页码、所属部门、更新时间，这些字段不参与相似度计算，但决定了后面能不能做溯源、能不能做权限过滤、能不能按时间加权。</p>
+  </div>
+
+  <h2><span class="n">4</span>入库前要带上的四类元数据</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:28%">字段</th><th style="width:28%">作用</th><th style="width:44%">没有会怎样</th></tr></thead>
+      <tbody>
+        <tr><td><code>source</code> 来源</td><td>答案标注出处</td><td>用户无法核实，合规场景直接不可用</td></tr>
+        <tr><td><code>page</code> / <code>section</code> 位置</td><td>定位到原文具体位置</td><td>只说「根据文档」，等于没说</td></tr>
+        <tr><td><code>updated_at</code> 时间</td><td>时效性加权、过滤过期内容</td><td>新旧规定一起召回，模型可能引用已废止的条款</td></tr>
+        <tr><td><code>dept</code> / <code>acl</code> 权限标签</td><td>按用户权限过滤检索结果</td><td>A 部门能查到 B 部门的机密文档</td></tr>
+      </tbody>
+    </table></div>    <p>最后一条在大模型时代之前没人重视，现在成了硬需求：<b>知识进了向量库，就绕过了原有的文档权限体系</b>。如果不在检索层做过滤，相当于给全公司开了一个统一的搜索框。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>解析是唯一不可逆的一步，漏掉的内容后面无法恢复。</li>
+      <li>PDF 双栏、扫描件、表格是三个高发坑；扫描件要先检测「是否抽出空文本」。</li>
+      <li>清洗去噪声，但必须保留标题层级和表格结构。</li>
+      <li>元数据（来源、位置、时间、权限）决定溯源、时效与权限过滤，入库时就要带上。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>为什么说数据解析是「不可逆」的一步？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>因为它最耗时</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>后续环节只能基于解析结果工作，丢失的内容无法凭空恢复</span></button>
+        <button class="opt"><i>C</i><span>因为解析后原始文件会被删除</span></button>
+      </div>
+      <div class="ex">分块、向量化、检索都是对已有文本做变换，可以重跑。解析是「信息进入系统」的唯一入口，漏在这道门外的内容，后面无论如何优化都找不回来。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>一份 10 行 6 列的表格，最合适的入库方式是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>整表转成一串用空格连接的文本</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>按行转成「字段: 值」的键值文本，或整表保留为结构化块</span></button>
+        <button class="opt"><i>C</i><span>只保留表头，丢弃数据行</span></button>
+      </div>
+      <div class="ex">拍平成一行会丢掉行列对应关系，检索到的是一堆孤立数字。按行键值化后，每一行都是自解释的、可独立检索的单元。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>不存权限标签（ACL）会带来什么问题？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>检索速度下降</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>所有用户都能检索到全部文档，绕过原有文档权限</span></button>
+        <button class="opt"><i>C</i><span>向量维度会不匹配</span></button>
+      </div>
+      <div class="ex">向量库是一个新的数据出口，它不认识你原来的权限体系。如果不在检索时按 ACL 过滤，相当于把所有部门的文档合并成一个公开搜索框。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    表格与扫描件的处理难点参考语雀《大模型 RAG 表格识别方法面试题》；元数据与权限问题见《RAG 关键痛点和解决方案》。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

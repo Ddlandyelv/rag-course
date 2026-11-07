@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="why">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>大模型的三个死穴 · RAG 知识体系</title>
+<meta name="description" content="这一页不聊 RAG 怎么做，只回答一个问题：<b>模型明明已经很聪明了，为什么还需要在外面套一套检索？</b>答案不在「它不够强」，而在「它">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">0.1</span><span>第零幕 · 为什么需要 RAG</span><span>·</span><span>WHY</span></div>
+    <h1>大模型的三个死穴</h1>
+    <p class="lede">这一页不聊 RAG 怎么做，只回答一个问题：<b>模型明明已经很聪明了，为什么还需要在外面套一套检索？</b>答案不在「它不够强」，而在「它的强项和严肃场景的要求错开了」。</p>
+    <div class="meta-row">
+      <span class="pill acc">第 1 页，不需要前置</span>
+      <span class="pill">读完接：0.2 微调与 RAG</span>
+      <span class="pill">约 <b>12</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>问题定义 · 对应「为什么要有 RAG」</span></div>
+      <div><b>不学卡在哪</b><span>会把 RAG 理解成「给模型加知识库」，说不清它和微调的分工，选型时容易选错。</span></div>
+      <div><b>它解决什么</b><span>建立判断标准：什么问题该用 RAG，什么问题该微调，什么情况两者都要。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>先说清楚：大模型不是「知道」，是「接得顺」</h2>
+  <div class="sec">
+    <p>很多人对 RAG 的理解停在一句「给模型补充知识」。这句话不算错，但它解释不了<b>为什么非要外挂一套检索</b>——如果只是缺知识，直接拿资料继续训练不就行了？</p>    <p>要回答这个问题，得先看清大模型到底在做什么。它的训练目标是<b>预测下一个词</b>：给定前面所有文字，输出词表里每个词出现的概率，然后挑一个接上去。训练充分之后，这个动作在人类语言上表现得极其熟练，于是读起来像是「懂」。</p>    <div class="q">问：珠穆朗玛峰的高度是多少？<br>模型内部：<b>「世界最高峰」+「高度」+「8848」</b>这几个词在训练语料里高频共现 → 接出「8848 米」。<br>这个过程里没有一步是「我去查证一下」。</div>    <p>所以它擅长的其实是<b>把已知的模式说得通顺</b>，而不是<b>确认一件事是否为真</b>。这两件事在大多数日常对话里长得一样，一旦进入严肃场景就分道扬镳。</p>
+  </div>
+
+  <h2><span class="n">2</span>三个死穴</h2>
+  <div class="sec">
+    <div class="flow"><div class="fn"><b>① 幻觉</b>不知道也照答</div><div class="fa">→</div><div class="fn"><b>② 过时</b>知识停在训练日</div><div class="fa">→</div><div class="fn"><b>③ 不懂私有</b>看不到你的文档</div></div>
+<h3>幻觉：它没有「我不知道」这个默认选项</h3>    <p>模型输出的是<b>概率上最像样的续写</b>，不是<b>事实核查后的结论</b>。遇到训练数据里没有的东西，它不会停下来报错——因为「停下来」这个行为本身也要靠训练信号来塑造，而绝大部分语料里，人面对提问都是直接给答案的。</p>    <p>于是它顺着语气往下编：格式对、术语对、数字具体、语气笃定，只有事实是错的。这类错误最危险的地方在于它<b>看起来比正确答案还像答案</b>。</p>    <div class="note"><p>一句常被引用的话：模型不是在撒谎，它是在<b>补全</b>。撒谎需要知道真相，补全不需要。</p></div>
+<h3>过时：训练完成的那一刻，知识就封存了</h3>    <p>训练一个基础模型要几个月，从数据采集到上线还要更久。也就是说，你拿到的模型，它的「世界」停在了某个日期。之后发生的发布会、政策变更、价格调整，它一概不知。</p>    <p>有人会说「那就定期重训」。可以，但代价是：每次都要重跑整个流程、重新评测、重新上线，而且<b>重训完那一刻，它又开始过时了</b>。这条路上永远差一步。</p>
+<h3>不懂私有数据：它从未见过你的文档</h3>    <p>这是企业场景里最先撞上的墙。公司的报销制度、产品手册、历史工单、内部 Wiki，没有任何一份在公开互联网上，因此也不在任何基础模型的训练集里。</p>    <p>你问它「一线城市出差住宿标准是多少」，它只能给你一个「一般公司会定在 300 到 600 之间」这种听起来专业、实际上没用的回答。</p>
+  </div>
+
+  <h2><span class="n">3</span>还有第四个缺陷，企业比学术界更在意</h2>
+  <div class="sec">
+    <p>前三个是「答得对不对」的问题。第四个是「<b>凭什么信你</b>」的问题：<b>不可溯源</b>。</p>    <p>模型给出一个结论，你没法知道它来自哪份文件、哪一条规定、哪一版。在客服、医疗、法务、金融这些场景里，一个没有出处的正确答案和错误答案一样不可用——因为出了问题没人能复盘。</p>    <p>RAG 恰好顺手解决了这一条：答案的依据是检索出来的原文片段，<b>每句话都能标出它来自哪一块</b>。这也是很多团队上 RAG 的真实动机，甚至排在「提升准确率」前面。</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:14%">缺陷</th><th style="width:22%">表现</th><th style="width:32%">微调能解决吗</th><th style="width:32%">RAG 能解决吗</th></tr></thead>
+      <tbody>
+        <tr><td>幻觉</td><td>编造不存在的事实</td><td>部分（用高质量数据压制，但压不干净）</td><td>明显缓解（有原文可依据，且可要求「没有就说没有」）</td></tr>
+        <tr><td>知识过时</td><td>不知道最近发生的事</td><td>能，但要反复重训</td><td>能，换掉语料即可，当天生效</td></tr>
+        <tr><td>不懂私有数据</td><td>答不出公司内部规定</td><td>能，但要把数据灌进参数</td><td>能，且原始文档不用改</td></tr>
+        <tr><td>不可溯源</td><td>说不出依据</td><td>不能（参数里没有出处）</td><td>能，直接返回原文片段</td></tr>
+      </tbody>
+    </table></div>    <p>这张表说明一件事：<b>RAG 不是唯一解，但它是唯一能同时覆盖四条的解法</b>。微调在「让模型学会一种说话方式或输出格式」上更强，但在这四条上是吃亏的。两者的分工，下一页展开。</p>
+  </div>
+
+  <h2><span class="n">4</span>换个角度：RAG 改的是「输入」，不是「模型」</h2>
+  <div class="sec">
+    <p>把上面这些收成一句话：<b>微调动的是模型的参数，RAG 动的是模型看到的上下文</b>。</p>    <p>这个区别决定了它们的性格：</p>    <ul>
+      <li>改参数 = 慢、贵、难回滚，但能把能力「长进」模型里；</li>
+      <li>改上下文 = 快、便宜、随时可换，但每次都要现查，且受限于检索质量。</li>
+    </ul>    <p>所以后面整门课的重点，其实不在「怎么调模型」，而在「<b>怎么在正确的时间，把正确的资料，以正确的形式递到模型面前</b>」。这句话听起来平淡，但 RAG 工程里 90% 的问题都出在这一步。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>大模型的训练目标是预测下一个词，因此它擅长「说得通顺」，不擅长「确认事实」。</li>
+      <li>三个天生缺陷：幻觉、知识过时、不懂私有数据；企业还会额外在意第四点——不可溯源。</li>
+      <li>微调改参数，RAG 改上下文。前者慢而深，后者快而浅，但覆盖面更广。</li>
+      <li>RAG 的核心不是让模型变聪明，是让它在回答前先看到正确的资料。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>模型「幻觉」的根本原因是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>训练数据里一定含有错误信息</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>它的输出目标是生成概率上合理的续写，而不是核实事实</span></button>
+        <button class="opt"><i>C</i><span>模型的参数量不够大</span></button>
+      </div>
+      <div class="ex">幻觉不是「学了错的东西」，而是「机制里没有核实这一步」。输出是一个概率采样过程，当上下文不足以确定答案时，它倾向于补全一个最像的，而不是停下来说不知道。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>下面哪一项是 RAG 能做、而微调做不到（或做得极差）的？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>让模型学会固定的输出 JSON 格式</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>让模型回答时给出「依据来自哪份文档的第几段」</span></button>
+        <button class="opt"><i>C</i><span>让模型说话更像某个行业的专家</span></button>
+      </div>
+      <div class="ex">微调把知识压进参数，参数里没有「出处」这种结构。RAG 的答案来自检索到的原文片段，天然可以标注来源。这也是很多合规场景上 RAG 的首要理由。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>「知识过时」这个问题，RAG 为什么比定期重训更合适？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>因为 RAG 的模型更大</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>因为 RAG 只要替换知识库里的文档，当天就能生效，不必重跑训练</span></button>
+        <button class="opt"><i>C</i><span>因为 RAG 不需要大模型</span></button>
+      </div>
+      <div class="ex">重训一次要几周到几个月，而且训完又开始过时。RAG 把「知识」从参数里拿出来放到外部库，更新知识就变成了更新文件——这是它最实用的一点。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    RAG 的动机部分参考了语雀题库《LLM 的局限性与 RAG 技术引入》《RAG 检索增强生成》两篇的论述框架；「不可溯源」这一点在《RAG 关键痛点和解决方案》中被列为企业落地的首要障碍。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

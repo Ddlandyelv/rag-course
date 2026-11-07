@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="chunk2">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>分块策略的取舍 · RAG 知识体系</title>
+<meta name="description" content="同样是切文档，切法不同，效果能差一倍。这一页给出四代分块方法、按文档类型的选型表，以及三个必须调对的工程参数。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">02</span><span>第一部分 · 离线索引</span><span>·</span><span>CHUNK</span></div>
+    <h1>分块策略的取舍</h1>
+    <p class="lede">同样是切文档，切法不同，效果能差一倍。这一页给出四代分块方法、按文档类型的选型表，以及三个必须调对的工程参数。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：0.5 分块、01 数据解析</span>
+      <span class="pill">读完接：03 向量库</span>
+      <span class="pill">约 <b>18</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>离线第 2 步 · 分块</span></div>
+      <div><b>不学卡在哪</b><span>照抄 <code>chunk_size=1000</code> 的默认值，中文还会被硬切，检索效果怎么调都上不去。</span></div>
+      <div><b>它解决什么</b><span>能根据文档类型选出合适的切分方式，并知道中文场景要改默认分隔符。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>四代分块方法</h2>
+  <div class="sec">
+    <p>分块方法大致经过四代演进，每一代都在解决上一代的边界问题：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:16%">代际</th><th style="width:40%">做法</th><th style="width:24%">长处</th><th style="width:20%">短处</th></tr></thead>
+      <tbody>
+        <tr><td>① 固定长度</td><td>每 N 个字符切一刀，可能带 overlap</td><td>简单、快、长度可控</td><td>必然切断句子，语义不完整</td></tr>
+        <tr><td>② 递归字符切分</td><td>按「段落 → 句子 → 词 → 字符」的顺序逐级降级，尽量在语义边界断开</td><td>通用性最好，是多数项目的默认选择</td><td>不理解文档结构，对表格代码无感</td></tr>
+        <tr><td>③ 结构感知切分</td><td>按 Markdown 标题、HTML 标签、代码块、LaTeX 环境切</td><td>块与文档结构对齐，标题可作上下文</td><td>依赖文档本身有结构；纯文本无能为力</td></tr>
+        <tr><td>④ 语义切分</td><td>计算相邻句子的向量相似度，在「话题突变」处断开</td><td>块内语义最连贯</td><td>要先跑一遍嵌入，成本高、速度慢</td></tr>
+      </tbody>
+    </table></div>    <p>LangChain 的 splitter 家族基本对应前三代：<code>CharacterTextSplitter</code>（第一代）、<code>RecursiveCharacterTextSplitter</code>（第二代）、<code>MarkdownHeaderTextSplitter</code> / <code>HTMLHeaderTextSplitter</code> / <code>Language.PYTHON</code>（第三代）。</p>
+  </div>
+
+  <h2><span class="n">2</span>按文档类型选切分器</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:24%">文档类型</th><th style="width:30%">推荐方式</th><th style="width:46%">理由</th></tr></thead>
+      <tbody>
+        <tr><td>技术文档、说明书</td><td>Markdown / HTML 标题切分</td><td>标题本身就是语义边界，还能把标题拼进块里当上下文</td></tr>
+        <tr><td>合同、法规</td><td>按条款编号切（正则）</td><td>「第 3.2 条」是天然的、法律上有效的边界</td></tr>
+        <tr><td>代码库</td><td>按函数 / 类切</td><td>代码块被切断就完全不可读</td></tr>
+        <tr><td>论文、报告</td><td>按章节 + 段落切</td><td>章节结构清晰，段落是最小完整语义单元</td></tr>
+        <tr><td>聊天记录、工单</td><td>按会话轮次切</td><td>一问一答构成完整上下文，切开就失去意义</td></tr>
+        <tr><td>无结构长文本</td><td>递归切分 + 适中 overlap</td><td>没有结构可用，只能逐级降级</td></tr>
+      </tbody>
+    </table></div>    <p>一个常被忽略的技巧：<b>把标题拼进每个块</b>。比如某块原文只有「一线城市 500 元，二线 350 元」，前面加上「出差管理制度 &gt; 住宿标准」，这块的向量就会带上主题信息，检索「住宿标准」时命中率明显提高。</p>
+  </div>
+
+  <h2><span class="n">3</span>三个工程参数</h2>
+  <div class="sec">
+    <div class="def">
+      <div class="def-h">chunk_size<span class="loc">参数 1</span></div>
+          <p>块的目标长度。按<b>字符</b>还是按 <b>token</b> 计算要统一——中文一个字符约等于 1–2 个 token，混用会导致实际长度失控。起点建议 300–500 字。</p>
+    </div>    <div class="def">
+      <div class="def-h">chunk_overlap<span class="loc">参数 2</span></div>
+          <p>相邻块的重叠长度。10%–20% 是常见区间。重叠过大时需要在检索结果里做去重，否则 top-K 会被近似重复的内容占满。</p>
+    </div>    <div class="def">
+      <div class="def-h">分隔符优先级<span class="loc">参数 3</span></div>
+          <p>递归切分时用哪一组分隔符。中文场景常见错误是沿用英文默认值（<code>\n\n</code>、<code>\n</code>、空格），结果中文句子因为「没有空格」被整段当成一个超长 token，最后只能硬切。</p>
+    </div>    <div class="note"><p>中文的递归分隔符建议写成：<code>["\n\n", "\n", "。", "！", "？", "；", "，", ""]</code>，让它在句号处就能断开。</p></div>
+  </div>
+
+  <h2><span class="n">4</span>一个更进一步的思路：小块检索、大块召回</h2>
+  <div class="sec">
+    <p>块大小的矛盾看起来无解：小了检索准但上下文不足，大了上下文全但检索钝。工程上有一个绕过它的办法——<b>父子分块</b>（也叫小块检索大块召回）：</p>    <ol>
+      <li>把文档切成大段（父块，如整节 1500 字）；</li>
+      <li>每一段再切成小句（子块，如 200 字）；</li>
+      <li>向量库里只存<b>子块</b>的向量；</li>
+      <li>检索时用子块匹配，命中后返回它所属的<b>父块</b>给模型。</li>
+    </ol>    <p>这样检索精度按小块的来，模型看到的是完整的父块，两个矛盾同时缓解。这个方案在第 08 页「检索中：混合检索与融合」里还会展开。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>四代分块：固定长度 → 递归降级 → 结构感知 → 语义切分，越往后越准也越贵。</li>
+      <li>按文档类型选切分器：标题、条款号、函数、会话轮次都是天然的语义边界。</li>
+      <li>把标题拼进块里，能显著提升主题类查询的命中率。</li>
+      <li>父子分块绕开了「小块准 / 大块全」的矛盾：检索用小块，返回用大块。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>中文场景沿用英文默认分隔符，最可能出的问题是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>中文无法被编码</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>中文句子间没有空格，递归切分降不到句子层，只能最后按字符硬切</span></button>
+        <button class="opt"><i>C</i><span>overlap 会失效</span></button>
+      </div>
+      <div class="ex">递归切分依赖分隔符逐级降级。英文有空格可以作为最低一级的分隔符，中文没有，所以必须显式把「。！？；，」加进分隔符列表。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>「父子分块」解决的核心矛盾是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>存储成本与检索速度</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>小块检索精度高但上下文不足，大块上下文全但检索钝</span></button>
+        <button class="opt"><i>C</i><span>多语言混杂</span></button>
+      </div>
+      <div class="ex">用子块做向量匹配保证精度，命中后回溯父块保证上下文完整。代价是要维护两层索引的映射关系，且父块太大会重新引入噪声。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>把标题拼进块内容的主要好处是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>减少存储</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>让块带上主题信息，提升主题类查询的召回率</span></button>
+        <button class="opt"><i>C</i><span>让向量维度变大</span></button>
+      </div>
+      <div class="ex">块原文可能只有具体数值，缺少主题词。拼上「出差管理制度 > 住宿标准」后，块的向量就带上了主题方向，用户问「住宿标准」时更容易命中。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    切分器家族与中文分隔符问题参考语雀《大模型 RAG 文本分块面试题》；父子分块见《RAG 优化相关面试题》中的「小块检索、大块召回」。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

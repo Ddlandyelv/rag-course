@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="vs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>微调与 RAG：闭卷考与开卷考 · RAG 知识体系</title>
+<meta name="description" content="这两个词经常被放在一起比较，但它们根本不是同一层的技术。这一页用一个比喻把边界划清楚：<b>微调改参数，RAG 改输入</b>。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">0.2</span><span>第零幕 · 为什么需要 RAG</span><span>·</span><span>COMPARE</span></div>
+    <h1>微调与 RAG：闭卷考与开卷考</h1>
+    <p class="lede">这两个词经常被放在一起比较，但它们根本不是同一层的技术。这一页用一个比喻把边界划清楚：<b>微调改参数，RAG 改输入</b>。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：0.1</span>
+      <span class="pill">读完接：0.3 最小闭环</span>
+      <span class="pill">约 <b>14</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>方案选型 · 对应「RAG vs 微调」</span></div>
+      <div><b>不学卡在哪</b><span>分不清两者边界，容易做出「用微调更新知识」或「用 RAG 改输出格式」这类错配。</span></div>
+      <div><b>它解决什么</b><span>给出可执行的判断口诀：缺知识用 RAG，缺格式用微调，都缺就先 RAG。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>一个比喻，先把两者分开</h2>
+  <div class="sec">
+    <p>假设你要让一个人通过一场专业考试。有两条路：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:12%">路线</th><th style="width:34%">做法</th><th style="width:34%">代价</th><th style="width:20%">对应技术</th></tr></thead>
+      <tbody>
+        <tr><td>闭卷考</td><td>把几千页资料背进脑子，考试时凭记忆作答</td><td>学费极贵（要反复训练）、改一个字就得重背（重训）、背错了没法查证</td><td><b>微调 Fine-tuning</b></td></tr>
+        <tr><td>开卷考</td><td>允许带书进场，考前把书整理好、做一份好用的索引</td><td>整理书要花功夫（数据工程）、翻书可能翻错页（检索质量）</td><td><b>RAG 检索增强生成</b></td></tr>
+      </tbody>
+    </table></div>    <p>这个比喻最精确的地方在于最后一行：<b>开卷考不是变简单了，是把难度从「记忆」转移到了「查资料」</b>。RAG 工程里绝大部分时间，确实花在「怎么把书整理得容易查」上，而不是模型本身。</p>
+  </div>
+
+  <h2><span class="n">2</span>关键区别：一个改参数，一个改输入</h2>
+  <div class="sec">
+    <p>技术上讲，两者的差别只有一句话：</p>    <div class="def">
+      <div class="def-h">微调（Fine-tuning）<span class="loc">改参数</span></div>
+          <p>拿你的数据继续训练模型，<b>改变模型的权重</b>。训练完之后，这些知识「长」在参数里，不占上下文，推理时不额外耗时。</p>
+    </div>    <div class="def">
+      <div class="def-h">RAG（Retrieval-Augmented Generation）<span class="loc">改上下文</span></div>
+          <p>模型完全不动。提问时先去外部知识库<b>检索相关片段</b>，把片段和问题一起塞进提示词，让模型「看着资料回答」。</p>
+    </div>    <p>这个区别带来的连锁反应，比想象中大：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:16%">维度</th><th style="width:42%">微调</th><th style="width:42%">RAG</th></tr></thead>
+      <tbody>
+        <tr><td>知识更新</td><td>重新训练，几小时到几天</td><td>替换文档，分钟级</td></tr>
+        <tr><td>成本</td><td>训练算力 + 标注数据</td><td>存储 + 检索算力（通常低一到两个数量级）</td></tr>
+        <tr><td>可溯源</td><td>做不到</td><td>天然支持</td></tr>
+        <tr><td>幻觉</td><td>可能被抑制，也可能被强化</td><td>有原文约束，且可要求「没写就说没写」</td></tr>
+        <tr><td>能力边界</td><td>能改变「怎么说」——语气、格式、领域表达</td><td>只能改变「依据什么说」，不会让模型变聪明</td></tr>
+        <tr><td>失效模式</td><td>过拟合、灾难性遗忘</td><td>检索不到、检索错了、检索到但模型没用好</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <h2><span class="n">3</span>所以它们不是替代关系</h2>
+  <div class="sec">
+    <p>一个常见的误解是「有了 RAG 就不用微调」。实际上两者解决的是不同层面的问题：</p>    <ul>
+      <li><b>微调解决「表达」</b>：让模型学会你的输出格式、行业话术、特定推理流程。比如必须输出固定结构的 JSON、必须按「结论—依据—风险」三段式回答。</li>
+      <li><b>RAG 解决「依据」</b>：让模型在回答时能看到最新、最准、最私有的资料。</li>
+    </ul>    <p>工业界的常见组合是：<b>先用微调让模型学会「怎么答」，再用 RAG 保证「答什么」</b>。反过来的顺序也行，但如果只做 RAG，模型可能拿着一堆正确资料，输出一个格式混乱的答案。</p>    <div class="note"><p>一个判断口诀：<b>缺知识 → RAG；缺格式、缺风格、缺特定推理习惯 → 微调；两者都缺 → 先 RAG 再微调</b>。先 RAG 的理由是它更快见效，能帮你看清问题到底出在「资料」还是「模型」。</p></div>
+  </div>
+
+  <h2><span class="n">4</span>为什么工业界一边倒地先上 RAG</h2>
+  <div class="sec">
+    <p>除了成本和时效，还有三个很实际的原因：</p>    <ol>
+      <li><b>可回滚</b>。检索效果不好，换个分块策略或换个嵌入模型就行；微调训歪了，只能回退版本重来。</li>
+      <li><b>可解释</b>。出问题时能直接看「检索到了什么」，定位是资料问题还是模型问题。微调是个黑箱，效果不好时你只知道「不好」，不知道为什么。</li>
+      <li><b>权限可控</b>。知识库可以按用户做权限过滤——A 部门查不到 B 部门的文档。知识一旦进了参数，就没法按人分权了。</li>
+    </ol>    <p>最后一条在 To B 场景里几乎是决定性的。这也是为什么 RAG 最初在企业内部知识问答里爆发，而不是在通用聊天里。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>微调 = 闭卷考（背进参数），RAG = 开卷考（现查资料）。</li>
+      <li>本质区别：微调改权重，RAG 改上下文。前者慢而深，后者快而浅。</li>
+      <li>微调管「怎么答」（格式、风格、话术），RAG 管「依据什么答」。</li>
+      <li>工业界先上 RAG 的三个现实理由：可回滚、可解释、可按人做权限过滤。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>如果需求是「让模型严格按公司模板输出采购申请单」，最该做的是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>把模板文件放进知识库，靠 RAG 解决</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>微调，或者用少样本提示约束输出格式</span></button>
+        <button class="opt"><i>C</i><span>换一个更大的模型</span></button>
+      </div>
+      <div class="ex">这是「表达」问题，不是「依据」问题。模板本身很短，放进知识库检索反而多余。正确做法是微调或用结构化输出约束（如 JSON schema、few-shot 示例）。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>「RAG 能降低幻觉」的准确机制是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>RAG 让模型参数变准了</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>回答被约束在检索到的原文范围内，且可以要求「资料里没有就说不知道」</span></button>
+        <button class="opt"><i>C</i><span>RAG 会过滤掉模型不确定的内容</span></button>
+      </div>
+      <div class="ex">模型没变，变的是它看到的上下文。有了明确资料，它「编」的空间被压缩；再加一句「未提及请回答不知道」，就多了一道硬约束。但这不等于零幻觉——模型仍可能误读资料或过度概括。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>知识库每天更新，为什么 RAG 比微调合适？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>RAG 的检索速度比推理快</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>更新文档即可生效，不需要重新训练模型</span></button>
+        <button class="opt"><i>C</i><span>RAG 不需要向量数据库</span></button>
+      </div>
+      <div class="ex">知识在外部库里，更新知识 = 更新文件 + 重建索引（通常分钟级）。微调则要重新走一遍训练、评测、上线流程，且训完立刻又开始过时。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    闭卷/开卷这个类比来自语雀《用大白话理解提示工程、RAG、微调》；能力边界的划分参考《深度解析 RAG 与模型微调》《RAG 和微调的应用场景》。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

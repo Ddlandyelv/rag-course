@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="post">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>检索后：重排与压缩 · RAG 知识体系</title>
+<meta name="description" content="召回了 50 条，真正有用的可能只有 3 条。这一页讲怎么用重排把它们挑出来，以及为什么排序顺序本身就是一种优化。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">09</span><span>第三部分 · Advanced RAG</span><span>·</span><span>RERANK</span></div>
+    <h1>检索后：重排与压缩</h1>
+    <p class="lede">召回了 50 条，真正有用的可能只有 3 条。这一页讲怎么用重排把它们挑出来，以及为什么排序顺序本身就是一种优化。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：08 混合检索</span>
+      <span class="pill">读完接：10 Self-RAG</span>
+      <span class="pill">约 <b>16</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>Advanced · 检索后</span></div>
+      <div><b>不学卡在哪</b><span>把召回的前 5 条直接塞给模型，噪声挤占了上下文，还以为是模型能力不够。</span></div>
+      <div><b>它解决什么</b><span>理解 Recall → Rerank 的两段式结构，会用排序与压缩把有效信息密度提上去。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>为什么要「先多捞再精筛」</h2>
+  <div class="sec">
+    <p>向量检索的排序只是<b>粗排</b>：它把问题和文档分别压成一个向量，再算一个数。这个过程中，文档内部的细节被「压扁」了，所以排序不够精细。</p>    <p>但它快。所以工程上的标准打法是两段：</p>    <div class="flow"><div class="fn"><b>召回</b>向量/混合检索取 50–100 条</div><div class="fa">→</div><div class="fn"><b>重排</b>交叉编码器逐条精算</div><div class="fa">→</div><div class="fn"><b>截断</b>取 top 3–5</div><div class="fa">→</div><div class="fn"><b>交给模型</b>拼进提示词</div></div>    <p>这个结构叫 <b>Recall → Rerank</b>。前半段负责「不漏」，后半段负责「准」。</p>
+  </div>
+
+  <h2><span class="n">2</span>重排模型和嵌入模型的根本区别</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:18%"></th><th style="width:41%">嵌入模型（Bi-encoder）</th><th style="width:41%">重排模型（Cross-encoder）</th></tr></thead>
+      <tbody>
+        <tr><td>输入</td><td>问题、文档<b>分别</b>编码</td><td>问题 + 文档<b>拼在一起</b>编码</td></tr>
+        <tr><td>能否预计算</td><td>能，文档向量可离线算好</td><td>不能，必须现场算</td></tr>
+        <tr><td>速度</td><td>极快（向量比对）</td><td>慢（每条都要跑一次模型）</td></tr>
+        <tr><td>精度</td><td>中（信息被压进一个向量）</td><td>高（能看到两者的词级交互）</td></tr>
+        <tr><td>用途</td><td>海量召回</td><td>小集合精排</td></tr>
+      </tbody>
+    </table></div>    <p>关键差别在「<b>是否让问题和文档互相看见</b>」。Bi-encoder 各自编码，文档不知道问题是什么；Cross-encoder 把两者拼在一起，能捕捉「问题里的这个词正好对应文档里的那句话」这种细粒度匹配。</p>    <div class="note"><p>这也是为什么重排不能替代召回：它对每条都要跑一次模型，10 万条文档全量重排的代价无法接受。它只能用在召回后的几十条上。</p></div>
+  </div>
+
+  <h2><span class="n">3</span>排序：把最相关的放在两端</h2>
+  <div class="sec">
+    <p>「迷失在中间」不只是「少给几条」的理由，它还决定了<b>排列顺序</b>。</p>    <p>假设重排后有 5 条，相关度依次为 1 &gt; 2 &gt; 3 &gt; 4 &gt; 5。按原顺序放进去，第 1 条在最前（好），但第 5 条在最后——它也可能被注意到，而第 3 条夹在中间最容易被忽略。</p>    <p>更优的排法是<b>两端优先</b>：把最强的放开头和结尾，最弱的放中间。</p>    <div class="q">原始：1 2 3 4 5<br>重排后：<b>1 3 5 4 2</b>（最强在首，次强在尾）</div>    <p>这个改动不需要任何模型，只是一次数组重排，但能稳定提升几个点的准确率。</p>
+  </div>
+
+  <h2><span class="n">4</span>上下文压缩：删掉无关的句子</h2>
+  <div class="sec">
+    <p>即便块选对了，块内部也可能有大段与问题无关的内容。压缩是在<b>句子级</b>做二次筛选：</p>    <ol>
+      <li>把每个块拆成句子；</li>
+      <li>算每句与问题的相关度；</li>
+      <li>只保留超过阈值的句子，或保留前后各一句作为上下文；</li>
+      <li>拼成精简后的资料。</li>
+    </ol>    <p>三种压缩粒度，代价递增：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:14%">粒度</th><th style="width:32%">做法</th><th style="width:28%">信息损失</th><th style="width:26%">成本</th></tr></thead>
+      <tbody>
+        <tr><td>块级</td><td>直接丢弃低分块</td><td>无（整块丢）</td><td>零</td></tr>
+        <tr><td>句级</td><td>按句子相关度筛选</td><td>可能丢失衔接句</td><td>低</td></tr>
+        <tr><td>摘要级</td><td>用小模型重写成摘要</td><td>可能引入改写误差</td><td>高</td></tr>
+      </tbody>
+    </table></div>    <p>优先用前两种。摘要级压缩虽然省 token，但它本身就是一个可能出错的黑箱，出问题时很难判断是检索错了还是摘要错了。</p>
+  </div>
+
+  <h2><span class="n">5</span>去重：一个常被忘掉的收尾</h2>
+  <div class="sec">
+    <p>overlap 和父子索引都会带来重复内容。如果 top-5 里有 3 条是同一段的相邻块，实际信息量只有 3 条，模型的注意力被浪费了。</p>    <p>简单做法：按<b>父块 id 去重</b>，或按文本相似度（如 Jaccard）去掉高度重叠的条目。这一步几乎没有成本，但能明显改善「资料看起来很丰富，答案却很单薄」的问题。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>两段式检索：召回负责不漏（50–100 条），重排负责准（取 3–5 条）。</li>
+      <li>Bi-encoder 分别编码，可预计算；Cross-encoder 拼接编码，精度高但不能预计算。</li>
+      <li>把最强与次强的资料放两端、最弱的放中间，利用「迷失在中间」的注意力分布。</li>
+      <li>压缩优先用块级/句级，摘要级会引入新的不确定性；去重是低成本高收益的收尾。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>重排模型不能替代向量检索的原因是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>重排模型精度更低</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>重排要对「问题 + 每条文档」现场跑一次模型，无法对全库执行</span></button>
+        <button class="opt"><i>C</i><span>重排模型不支持中文</span></button>
+      </div>
+      <div class="ex">这是成本结构决定的：Cross-encoder 无法预计算文档表示，每条查询都要现场推理。所以它只能用在召回后的几十条上。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>「把最相关的放首尾、最弱的放中间」依据的是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>模型的上下文窗口有限</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>「迷失在中间」现象：中间位置的内容更容易被忽略</span></button>
+        <button class="opt"><i>C</i><span>向量库的排序规则</span></button>
+      </div>
+      <div class="ex">这是一次零成本的数组重排，利用注意力的位置偏差。不需要改模型、不需要额外调用，属于性价比最高的优化之一。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>为什么建议慎用「摘要级压缩」？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>它太慢</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>摘要模型本身可能出错或丢失关键限定条件，且难以归因</span></button>
+        <button class="opt"><i>C</i><span>它会让向量维度变化</span></button>
+      </div>
+      <div class="ex">摘要是一个有损且不可解释的转换。当答案出错时，你无法判断是检索错了、摘要丢了信息，还是生成模型理解错了——排查成本大幅上升。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    重排与压缩的做法参考语雀《RAG 十种优化技巧》《17 种 RAG 优化策略》；Cross-encoder 与 Bi-encoder 的差异见《深入理解 RAG 的工作机制》。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

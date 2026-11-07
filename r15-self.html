@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="self">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Self-RAG：要不要查，让它自己判断 · RAG 知识体系</title>
+<meta name="description" content="无条件检索是标准 RAG 的默认行为，也是最容易被忽略的浪费。这一页讲 Self-RAG 怎么用反思标记把这个决定权交还给模型。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">10</span><span>第三部分 · Advanced RAG</span><span>·</span><span>SELF-RAG</span></div>
+    <h1>Self-RAG：要不要查，让它自己判断</h1>
+    <p class="lede">无条件检索是标准 RAG 的默认行为，也是最容易被忽略的浪费。这一页讲 Self-RAG 怎么用反思标记把这个决定权交还给模型。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：09 重排</span>
+      <span class="pill">读完接：11 碎片化的天花板</span>
+      <span class="pill">约 <b>16</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>Advanced · 流程控制</span></div>
+      <div><b>不学卡在哪</b><span>所有请求都无条件检索，闲聊类问题也被塞进几段无关资料，延迟和成本都白花。</span></div>
+      <div><b>它解决什么</b><span>知道什么时候该引入「是否检索」的判断，以及它和 Agentic RAG 的关系。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>一个朴素但昂贵的问题：每次都要检索吗</h2>
+  <div class="sec">
+    <p>标准 RAG 是「无条件检索」：用户说「你好」，它也去查一遍知识库。这带来三个浪费：</p>    <ul>
+      <li><b>延迟</b>：每次问答都多一次检索耗时；</li>
+      <li><b>成本</b>：多一次嵌入计算 + 向量检索；</li>
+      <li><b>干扰</b>：明明不需要资料的问题，硬塞几段不相关的内容，反而让回答变差。</li>
+    </ul>    <p>更麻烦的是，检索回来的东西<b>不一定有用</b>。如果检索结果与问题无关，标准 RAG 仍会把它塞进提示词，然后模型基于无关内容硬答。</p>
+  </div>
+
+  <h2><span class="n">2</span>Self-RAG 的核心：让模型自己判断</h2>
+  <div class="sec">
+    <p>Self-RAG 的思路是训练模型在生成过程中输出<b>反思标记</b>（reflection token），用这些标记控制流程：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:18%">标记</th><th style="width:42%">回答的问题</th><th style="width:40%">取值</th></tr></thead>
+      <tbody>
+        <tr><td><b>Retrieve</b></td><td>这个问题需要检索吗？</td><td>需要 / 不需要</td></tr>
+        <tr><td><b>IsREL</b></td><td>这段资料与问题相关吗？</td><td>相关 / 不相关</td></tr>
+        <tr><td><b>IsSUP</b></td><td>我的这句话有资料支持吗？</td><td>完全支持 / 部分支持 / 无支持</td></tr>
+        <tr><td><b>IsUSE</b></td><td>这个答案对用户有用吗？</td><td>1–5 分</td></tr>
+      </tbody>
+    </table></div>    <p>流程因此变成：先判断要不要检索 → 检索后逐段判断相关性 → 生成时逐句判断是否有依据 → 最后判断整体是否有用。任一环节不满足，就<b>重新检索或调整生成</b>。</p>
+  </div>
+
+  <h2><span class="n">3</span>和「用提示词让模型反思」的区别</h2>
+  <div class="sec">
+    <p>有人会问：这不就是加一句「请检查你的答案是否有依据」吗？不是。差别在<b>训练方式</b>：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:14%"></th><th style="width:43%">提示词式反思</th><th style="width:43%">Self-RAG</th></tr></thead>
+      <tbody>
+        <tr><td>实现</td><td>在提示里要求模型自检</td><td>专门训练模型输出反思标记</td></tr>
+        <tr><td>可靠性</td><td>不稳定，模型可能「假装检查过」</td><td>标记是训练出来的行为，可被解析和统计</td></tr>
+        <tr><td>可控性</td><td>无法在流程中分支</td><td>可以按标记决定是否重检索、是否拒答</td></tr>
+        <tr><td>成本</td><td>无额外训练</td><td>需要构造训练数据并微调</td></tr>
+      </tbody>
+    </table></div>    <p>所以 Self-RAG 是一个<b>训练方案</b>，不是提示技巧。如果不想训练，可以用「提示词 + 多次调用」模拟它的流程（这就是 Agentic RAG 的雏形，见第 13、14 页），代价是延迟更高、稳定性更差。</p>
+  </div>
+
+  <h2><span class="n">4</span>什么时候值得上 Self-RAG</h2>
+  <div class="sec">
+    <p>它解决的问题很具体：<b>查询类型混杂</b>。</p>    <p>如果你的系统里，用户既会问「今天天气」（不需要知识库），也会问「报销标准」（需要），还会问「帮我写封邮件」（不需要检索但要生成），那无条件检索就是浪费。</p>    <p>反过来，如果系统只服务单一场景（比如只做制度问答），每次都必须检索，那么上 Self-RAG 的收益就很有限——判断「要不要检索」这一步永远返回「要」。</p>    <div class="note"><p>判断标准：<b>如果「不需要检索」的请求占比超过 20%，就值得考虑</b>；低于这个比例，优化别的环节更划算。</p></div>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>无条件检索在「不需要资料」的请求上浪费延迟与成本，还会引入干扰。</li>
+      <li>Self-RAG 训练模型输出四类反思标记：要不要检索、资料相关吗、句子有依据吗、答案有用吗。</li>
+      <li>它是训练方案而非提示技巧；不训练时可用多轮提示模拟，但延迟与稳定性都更差。</li>
+      <li>「不需要检索」的请求占比超过 20% 时，才值得投入 Self-RAG。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>Self-RAG 与「在提示词里要求模型自检」的关键差别是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>Self-RAG 用的模型更大</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>Self-RAG 通过训练让模型输出可解析的反思标记，能真正驱动流程分支</span></button>
+        <button class="opt"><i>C</i><span>提示词式自检不需要模型</span></button>
+      </div>
+      <div class="ex">提示词式自检的结果是一段自然语言，难以稳定解析，模型也可能「走过场」。Self-RAG 把反思变成结构化标记，才能用来控制「是否重检索」「是否拒答」。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>什么情况下不适合上 Self-RAG？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>查询类型非常混杂</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>系统只做单一场景问答，每次都必须检索</span></button>
+        <button class="opt"><i>C</i><span>知识库很大</span></button>
+      </div>
+      <div class="ex">如果「要不要检索」的判断永远返回「要」，这个模块就是纯开销。它的价值建立在「查询类型多样」这个前提上。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>IsSUP 标记检查的是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>检索到的资料是否与问题相关</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>生成的这句话是否有资料支持</span></button>
+        <button class="opt"><i>C</i><span>答案是否让用户满意</span></button>
+      </div>
+      <div class="ex">四个标记各管一段：Retrieve 管要不要查，IsREL 管资料相不相关，IsSUP 管生成内容有没有依据（对应忠实度），IsUSE 管整体有没有用。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    Self-RAG 的四个反思标记与训练/推理流程参考语雀《RAG 优化相关面试题》「Self-RAG：如何让大模型对召回结果进行筛选」一节。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

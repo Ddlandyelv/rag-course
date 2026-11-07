@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="tri">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>评估铁三角 · RAG 知识体系</title>
+<meta name="description" content="「答案对不对」这一个问题，掩盖了三个阶段各自的失败。这一页给出三个互相独立的指标，让「效果不好」变成可以定位的问题。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">15</span><span>第六部分 · 评估</span><span>·</span><span>EVAL</span></div>
+    <h1>评估铁三角</h1>
+    <p class="lede">「答案对不对」这一个问题，掩盖了三个阶段各自的失败。这一页给出三个互相独立的指标，让「效果不好」变成可以定位的问题。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：14 多轮检索</span>
+      <span class="pill">读完接：16 怎么测</span>
+      <span class="pill">约 <b>16</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>评估 · 指标体系</span></div>
+      <div><b>不学卡在哪</b><span>只看最终答案对不对，出问题时无法判断是检索错了还是生成错了，优化全靠猜。</span></div>
+      <div><b>它解决什么</b><span>建立「检索 / 生成 / 端到端」三段指标，能用 RAGAS 快速搭起评估基线。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>为什么需要三个指标，而不是一个</h2>
+  <div class="sec">
+    <p>如果只问「答案对不对」，你会得到一个二元判断，但它<b>无法告诉你哪里错了</b>。RAG 是一条三段式流水线，任何一段出问题都会表现为「答案不对」，所以需要三个指标分别盯住三段。</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:24%">指标</th><th style="width:16%">盯哪一段</th><th style="width:30%">问的问题</th><th style="width:30%">低分说明</th></tr></thead>
+      <tbody>
+        <tr><td><b>上下文相关性</b><br>Context Relevance</td><td>检索</td><td>捞出来的资料和问题有关吗？</td><td>检索环节有问题：改写、混合、重排需要调</td></tr>
+        <tr><td><b>忠实度</b><br>Faithfulness</td><td>生成</td><td>答案的每句话都有资料支持吗？</td><td>生成环节有问题：约束不够、模型在编</td></tr>
+        <tr><td><b>答案相关性</b><br>Answer Relevance</td><td>端到端</td><td>答案正面回应了用户的问题吗？</td><td>可能是检索偏了，也可能是答非所问</td></tr>
+      </tbody>
+    </table></div>    <p>这就是「铁三角」的含义：<b>三者独立，缺一就无法定位</b>。</p>
+  </div>
+
+  <h2><span class="n">2</span>三个指标各怎么算</h2>
+  <div class="sec">
+    <div class="def">
+      <div class="def-h">上下文相关性<span class="loc">检索质量</span></div>
+          <p>把「问题 + 每一段检索到的资料」交给裁判模型，逐段打分（0–1 或 1–5），再取平均。</p>    <p>有的实现更细：只统计「真正被用到的段落」的相关性，避免无关段落拉低分数。</p>
+    </div>    <div class="def">
+      <div class="def-h">忠实度<span class="loc">生成质量</span></div>
+          <p>先把答案拆成若干<b>断言</b>（一句话一个事实主张），再逐条判断「这条断言能否由资料推出」。</p>    <div class="q">忠实度 = 有资料支持的断言数 / 断言总数</div>    <p>注意它<b>不判断答案对不对</b>，只判断「是否忠于资料」。如果资料本身是错的，忠实度仍可能是 1。</p>
+    </div>    <div class="def">
+      <div class="def-h">答案相关性<span class="loc">端到端</span></div>
+          <p>反过来：拿生成的答案，让模型反推「这个答案可能在回答什么问题」，再计算反推问题与原问题的相似度。</p>    <p>这个设计很巧妙——它绕开了「答案是否正确」这个难以判断的问题，只判断「是否在回应问题」。</p>
+    </div>
+  </div>
+
+  <h2><span class="n">3</span>三个都高，用户仍可能不满意</h2>
+  <div class="sec">
+    <p>这种情况真实存在，而且不罕见：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:42%">场景</th><th style="width:20%">三指标表现</th><th style="width:38%">真实问题</th></tr></thead>
+      <tbody>
+        <tr><td>资料相关、答案忠实、也回应了问题，但答案是三年前的旧规定</td><td>全高</td><td><b>时效性</b>没被评估</td></tr>
+        <tr><td>答案完整但格式混乱，用户看不懂</td><td>全高</td><td><b>可用性</b>没被评估</td></tr>
+        <tr><td>答案正确但拒答了大量本该能答的问题</td><td>全高（在答的部分）</td><td><b>覆盖率</b>没被评估</td></tr>
+      </tbody>
+    </table></div>    <p>所以工业界还会补三类指标：</p>    <ul>
+      <li><b>覆盖率 / 拒答率</b>：本该回答却拒答的比例；</li>
+      <li><b>时效准确率</b>：引用的资料是否在有效期内；</li>
+      <li><b>用户反馈</b>：点赞/点踩、是否追问、是否转人工。</li>
+    </ul>    <p>最后一条最重要也最容易被忽略：<b>自动指标是筛查工具，用户行为才是最终裁判</b>。</p>
+  </div>
+
+  <h2><span class="n">4</span>RAGAS：一套现成的开源实现</h2>
+  <div class="sec">
+    <p>RAGAS 是目前最常用的 RAG 评估框架，它把上面几个指标工程化了，并且提供四个标准指标：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:34%">RAGAS 指标</th><th style="width:30%">对应本文的说法</th><th style="width:36%">需要什么输入</th></tr></thead>
+      <tbody>
+        <tr><td><code>context_precision</code></td><td>上下文相关性（精确度）</td><td>问题、检索到的上下文、标准答案</td></tr>
+        <tr><td><code>context_recall</code></td><td>上下文的召回率</td><td>问题、上下文、标准答案</td></tr>
+        <tr><td><code>faithfulness</code></td><td>忠实度</td><td>答案、上下文</td></tr>
+        <tr><td><code>answer_relevancy</code></td><td>答案相关性</td><td>问题、答案</td></tr>
+      </tbody>
+    </table></div>    <p><code>context_recall</code> 值得单独说：它衡量「标准答案需要的信息，有多少被检索到了」。这比「检索结果相不相关」更严格——<b>相关性高但漏了关键信息，召回率仍然低</b>。</p>    <div class="note"><p>四个指标里，<code>context_*</code> 两个需要标准答案，所以要先有一份人工标注的测试集。这份集的构建方法，是下一页的主题。</p></div>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>三个指标分别盯住检索、生成、端到端，缺一无法定位问题。</li>
+      <li>忠实度只判断「是否忠于资料」，不判断资料本身对不对。</li>
+      <li>三指标全高仍可能不满意：时效、可用性、覆盖率不在其中。</li>
+      <li>RAGAS 把指标工程化，其中 context_recall 需要标准答案，因此必须先有测试集。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>忠实度高但答案仍然错误，可能是什么原因？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>模型理解能力不足</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>检索到的资料本身就是错的，模型忠实复述了错误内容</span></button>
+        <button class="opt"><i>C</i><span>评估指标算错了</span></button>
+      </div>
+      <div class="ex">忠实度只衡量「答案是否忠于资料」，不衡量「资料是否忠于事实」。所以它必须和上下文相关性、以及资料来源的可靠性一起看。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>「答案相关性」用什么巧妙方式绕开了「判断答案对不对」？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>用人工打分</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>让模型从答案反推可能的问题，再比较与原问题的相似度</span></button>
+        <button class="opt"><i>C</i><span>直接比较答案与标准答案的字面重合</span></button>
+      </div>
+      <div class="ex">反推问题的好处是不需要标准答案，也不依赖事实核查——它只判断「这个答案是不是在回应这个问题」。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>为什么评估 RAG 时「覆盖率/拒答率」也重要？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>因为它容易计算</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>因为只评估已答的问题会掩盖「大量该答的问题被拒答」这一失败模式</span></button>
+        <button class="opt"><i>C</i><span>因为它能替代人工评估</span></button>
+      </div>
+      <div class="ex">如果系统对 60% 的问题都回答「资料中未提及」，剩下 40% 答得再好，整体也是失败的。覆盖率必须与准确率一起看。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    三指标（上下文相关性、忠实度、答案相关性）的划分来自语雀《如何评估 RAG》《大模型 RAG 评测面试题》；RAGAS 的四个标准指标为通用实现。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

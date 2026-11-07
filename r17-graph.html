@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="graph">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>知识图谱怎么建、怎么用 · RAG 知识体系</title>
+<meta name="description" content="Graph RAG 不是「更好的 RAG」，它换了一套数据结构。这一页讲清楚建图的五步、两种查询路径，以及为什么很多团队评估后决定不上。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">12</span><span>第四部分 · Graph RAG</span><span>·</span><span>GRAPH</span></div>
+    <h1>知识图谱怎么建、怎么用</h1>
+    <p class="lede">Graph RAG 不是「更好的 RAG」，它换了一套数据结构。这一页讲清楚建图的五步、两种查询路径，以及为什么很多团队评估后决定不上。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：11 碎片化的天花板</span>
+      <span class="pill">读完接：13 从流水线到智能体</span>
+      <span class="pill">约 <b>18</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>Graph RAG · 架构与成本</span></div>
+      <div><b>不学卡在哪</b><span>以为 Graph RAG 是「升级版」，不评估成本就上，建完发现维护不起。</span></div>
+      <div><b>它解决什么</b><span>理解局部查询与全局查询的分工，能算出建图成本并做出取舍。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>离线：从文本里抽出「谁—做了什么—和谁」</h2>
+  <div class="sec">
+    <p>Graph RAG 的离线流程比传统 RAG 多三步：</p>    <div class="flow"><div class="fn"><b>分块</b>照常切块</div><div class="fa">→</div><div class="fn"><b>实体抽取</b>人名/公司/事件</div><div class="fa">→</div><div class="fn"><b>关系抽取</b>谁与谁、什么关系</div><div class="fa">→</div><div class="fn"><b>建图</b>节点 + 边</div><div class="fa">→</div><div class="fn"><b>社区检测</b>聚类成话题圈</div><div class="fa">→</div><div class="fn"><b>社区摘要</b>每圈写一份概述</div></div>    <p>前两步是常规操作，真正决定 Graph RAG 能力的是后两步：</p>    <div class="def">
+      <div class="def-h">社区检测（Community Detection）<span class="loc">分层聚类</span></div>
+          <p>用图算法（常见是 Leiden）把关系紧密的节点聚成一个个「社区」。一个社区大致对应「一个话题圈」——比如某个项目的所有相关方。</p>    <p>这一步是自动的，不需要人工定义分类体系。</p>
+    </div>    <div class="def">
+      <div class="def-h">社区摘要（Community Summary）<span class="loc">预压缩</span></div>
+          <p>对每个社区，让 LLM 读一遍其中所有实体与关系，写一段概述。摘要可以分层：小社区先摘要，再把小社区摘要合成大社区摘要。</p>    <p>这些摘要就是回答「全局性问题」的素材——<b>它把分散的信息预先压缩了</b>。</p>
+    </div>
+  </div>
+
+  <h2><span class="n">2</span>在线：两种查询走两条路</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:34%">查询类型</th><th style="width:26%">走哪条路</th><th style="width:40%">机制</th></tr></thead>
+      <tbody>
+        <tr><td><b>局部查询</b><br>「张三负责哪个项目」</td><td>实体 → 邻居</td><td>先在图里定位实体节点，取它的邻居与相关原文，拼成上下文</td></tr>
+        <tr><td><b>全局查询</b><br>「所有项目的共同风险」</td><td>社区摘要 → 分层汇总</td><td>取出所有社区摘要，分批让模型各写一份小结，再汇总成总答案</td></tr>
+      </tbody>
+    </table></div>    <p>全局查询本质上是 <b>map-reduce</b>：每个社区摘要各自 map 出一份局部结论，最后 reduce 成一个整体答案。这也是它敢说「覆盖全库」的原因——它读的不是原文，而是预先压好的摘要。</p>    <div class="note"><p>注意代价：全局查询要调用多次模型（社区数量越多调用越多），延迟和成本都显著高于一次普通检索。所以它通常用于「离线报告、周报生成」这类场景，不适合放进实时对话的主链路。</p></div>
+  </div>
+
+  <h2><span class="n">3</span>建图的成本账</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:24%">环节</th><th style="width:20%">成本</th><th style="width:56%">说明</th></tr></thead>
+      <tbody>
+        <tr><td>实体/关系抽取</td><td><b>高</b></td><td>要对每一块文档跑一次 LLM，5000 块就是 5000 次调用</td></tr>
+        <tr><td>社区检测</td><td>低</td><td>纯图算法，秒级到分钟级</td></tr>
+        <tr><td>社区摘要</td><td><b>中高</b></td><td>每个社区一次 LLM 调用，且要分层重复</td></tr>
+        <tr><td>增量更新</td><td><b>高</b></td><td>文档变更要重新抽取、可能触发社区重算</td></tr>
+      </tbody>
+    </table></div>    <p>一笔粗略的估算：10 万块文档的建图，LLM 调用成本可能是传统入库的<b>几十倍</b>，且每次全量重建都要重跑。这也是很多团队「评估后决定不上」的真实原因——不是效果不好，是成本结构不匹配。</p>
+  </div>
+
+  <h2><span class="n">4</span>什么时候该上，什么时候不该</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:16%">判断项</th><th style="width:42%">偏向 Graph RAG</th><th style="width:42%">偏向传统 RAG</th></tr></thead>
+      <tbody>
+        <tr><td>查询类型</td><td>总结、趋势、关系网占比高</td><td>查具体事实、条款、数值</td></tr>
+        <tr><td>文档间关联</td><td>强（人物、事件、项目互相引用）</td><td>弱（各文档相对独立）</td></tr>
+        <tr><td>更新频率</td><td>低（可接受定期重建）</td><td>高（要求实时生效）</td></tr>
+        <tr><td>延迟要求</td><td>宽松（报告、离线分析）</td><td>严格（在线问答）</td></tr>
+        <tr><td>预算</td><td>充足</td><td>有限</td></tr>
+      </tbody>
+    </table></div>    <p>一个务实的过渡方案：<b>传统 RAG 为主，图谱只覆盖核心实体</b>。比如只对「客户、产品、合同」三类实体建图，其余仍走向量检索。既拿到关系查询的能力，又不承担全量建图的成本。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>Graph RAG 离线多做三步：关系抽取建图、社区检测、社区摘要。</li>
+      <li>局部查询走「实体→邻居」，全局查询走「社区摘要→分层汇总（map-reduce）」。</li>
+      <li>全局查询覆盖全库的代价是多次模型调用，延迟与成本都高。</li>
+      <li>建图成本可能是传统入库的几十倍，只在该类查询占比高、更新不频繁时才划算。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>Graph RAG 能回答全局性问题的关键是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>它的向量检索更准</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>它预先为每个社区生成了摘要，全局查询读的是摘要而不是原文</span></button>
+        <button class="opt"><i>C</i><span>它的模型更大</span></button>
+      </div>
+      <div class="ex">摘要相当于一次「预压缩」：把分散在几百块里的信息提前归纳。查询时不需要再去检索原文，而是对摘要做分层汇总。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>社区摘要的主要成本在哪？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>存储摘要文本</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>每个社区都要调用一次模型，且分层时还要重复调用</span></button>
+        <button class="opt"><i>C</i><span>计算社区之间的相似度</span></button>
+      </div>
+      <div class="ex">社区数量可能成百上千，每个都要一次 LLM 调用；分层汇总还要再跑一轮。这是 Graph RAG 成本高于传统 RAG 的主要来源之一。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>文档每天更新、要求实时生效的场景，为什么不适合全量 Graph RAG？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>因为图谱不支持更新</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>因为增量更新要重新抽取实体关系、可能触发社区重算，成本与延迟都高</span></button>
+        <button class="opt"><i>C</i><span>因为图数据库容量有限</span></button>
+      </div>
+      <div class="ex">建图是一次「重加工」，不像向量索引那样容易增量维护。高频更新的知识库更适合传统 RAG，或只用图谱覆盖稳定的核心实体。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    图谱增强与社区摘要的做法参考语雀《如何利用知识图谱进行上下文增强》《Graph RAG 面试题》；成本结构为本文补充的估算。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="vec">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>向量：让「意思」变成距离 · RAG 知识体系</title>
+<meta name="description" content="RAG 里最反直觉的一步，是把文字变成一串数字，然后靠数字之间的距离判断意思像不像。这一页讲清楚这件事为什么成立、边界在哪。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">0.4</span><span>第零幕 · 为什么需要 RAG</span><span>·</span><span>CONCEPT</span></div>
+    <h1>向量：让「意思」变成距离</h1>
+    <p class="lede">RAG 里最反直觉的一步，是把文字变成一串数字，然后靠数字之间的距离判断意思像不像。这一页讲清楚这件事为什么成立、边界在哪。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：0.3</span>
+      <span class="pill">读完接：0.5 分块</span>
+      <span class="pill">约 <b>15</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>离线第 3 步 · 向量化</span></div>
+      <div><b>不学卡在哪</b><span>不理解向量在做什么，就无法理解「为什么同义词能搜到、型号搜不到」，也调不好 top-K。</span></div>
+      <div><b>它解决什么</b><span>建立「语义 = 方向」的直觉，并知道向量检索的硬边界，为混合检索铺路。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>计算机不认识「意思」，只认识数字</h2>
+  <div class="sec">
+    <p>文本检索要解决一个根本矛盾：<b>怎么让机器判断两段话「意思像不像」</b>。字面匹配只能判断「字像不像」——「小狗」和「哈士奇」字面上毫无关系，但意思上它们是邻居；「苹果手机」和「红富士苹果」字面上共享两个字，意思上离得很远。</p>    <p>解法是把文字映射成一串数字，让<b>语义关系变成空间里的距离关系</b>。这串数字就叫<b>向量（vector）</b>，做这件事的模型叫<b>嵌入模型（embedding model）</b>。</p>    <div class="def">
+      <div class="def-h">嵌入（Embedding）<span class="loc">把语义变成坐标</span></div>
+          <p>把一段文字（也可以是一张图、一段音频）映射成一个固定长度的实数数组。比如 1024 维：<code>[0.021, -0.384, 0.117, ..., 0.009]</code>。</p>    <p>关键性质：<b>语义相近的输入，向量在空间里的方向也相近</b>。这个性质不是被设计出来的，是从海量文本对里「学」出来的。</p>
+    </div>
+  </div>
+
+  <h2><span class="n">2</span>为什么「方向」比「距离」更重要</h2>
+  <div class="sec">
+    <p>衡量两个向量像不像，最常用的是<b>余弦相似度</b>：算两个向量夹角的余弦值。</p>    <div class="q">cos(θ) = (A · B) / (|A| × |B|)<br>取值 −1 到 1：1 表示方向完全一致，0 表示正交（无关），−1 表示完全相反。</div>    <p>为什么用夹角而不是直线距离？因为<b>直线距离会被「文本长度」带偏</b>：一段 500 字的介绍和一段 20 字的短描述，即使用词完全一样，向量长度也可能差很多，但方向几乎一致。用夹角就能把「长度」这个干扰项去掉，只留下「在说什么」。</p>    <p>这也是为什么工程上常把向量<b>归一化</b>（长度缩放到 1）：归一化之后，余弦相似度就等于内积，计算更快，且可以用专门的近似检索算法。</p>
+  </div>
+
+  <h2><span class="n">3</span>一个具体的例子</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:22%">文本 A</th><th style="width:24%">文本 B</th><th style="width:14%">字面重合</th><th style="width:14%">向量距离</th><th style="width:26%">判断</th></tr></thead>
+      <tbody>
+        <tr><td>小狗</td><td>哈士奇</td><td>0 个字</td><td><b>很近</b></td><td>语义上都是犬类，方向几乎一致</td></tr>
+        <tr><td>苹果手机</td><td>红富士苹果</td><td>「苹果」2 个字</td><td><b>较远</b></td><td>一个指电子产品，一个指水果，被上下文拉开了</td></tr>
+        <tr><td>怎么退货</td><td>退款流程是什么</td><td>0 个字</td><td><b>很近</b></td><td>同一件事的两种问法</td></tr>
+        <tr><td>怎么退货</td><td>怎么发货</td><td>「怎么」2 个字</td><td><b>中等</b></td><td>都是售后动作，但方向不同</td></tr>
+      </tbody>
+    </table></div>    <p>这张表里最值得看的是第二行：<b>字面重合度与语义距离可以完全相反</b>。这正是向量检索比关键词检索强的地方，也是它唯一的强项。</p>
+  </div>
+
+  <h2><span class="n">4</span>向量检索的天生短板</h2>
+  <div class="sec">
+    <p>同样的机制也带来了一个硬伤：<b>它对「精确的字符串」不敏感</b>。</p>    <p>你想找型号为 <code>A-102</code> 的零件，向量检索会认为 A-103、B-102 甚至「零件型号」这四个字都跟你很像——因为在语义空间里，它们都属于「零件编号」这个概念，而 A-102 和 A-103 的差别，在 1024 维空间里几乎看不出来。</p>    <p>所以工业界几乎不会只用向量检索。标准做法是<b>向量检索 + 关键词检索（BM25）</b>双路并行，再合并结果。这个方案叫<b>混合检索</b>，是第 08 页的主题。</p>    <div class="note"><p>记住这个分工：<b>向量管「意思像」，关键词管「字面上有」</b>。少了任何一路，都会在某一类问题上集体失手。</p></div>
+  </div>
+
+  <h2><span class="n">5</span>维度是不是越高越好</h2>
+  <div class="sec">
+    <p>常见维度有 384、768、1024、1536、3072。维度高能表达更细的语义差别，但代价是：</p>    <ul>
+      <li>存储翻倍（1000 万条 × 1024 维 × 4 字节 ≈ 40 GB，还不含索引）；</li>
+      <li>检索变慢（相似度计算量与维度成正比）；</li>
+      <li>超过某个点后收益递减，甚至因为「维度灾难」而变差。</li>
+    </ul>    <p>实际选择主要看<b>模型本身</b>而不是维度数字：换一个更强的嵌入模型（哪怕是同样维度），效果提升通常远大于把维度翻倍。所以正确的优化顺序是：<b>先换模型，再考虑维度</b>。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>嵌入模型把文字映射成向量，让「语义相近」变成「方向相近」。</li>
+      <li>余弦相似度用夹角而非直线距离，是为了去掉文本长度带来的干扰。</li>
+      <li>向量检索擅长同义改写，短板是对精确字符串（型号、编号、人名缩写）不敏感。</li>
+      <li>维度越高不等于越好；换更强的模型比加维度更有效。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>为什么相似度常用余弦而不是欧氏距离？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>余弦计算更快</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>余弦只看方向、不受向量长度（往往与文本长度相关）影响</span></button>
+        <button class="opt"><i>C</i><span>欧氏距离在数学上是错的</span></button>
+      </div>
+      <div class="ex">两段内容相同但长度差很多的文字，向量长度可能差很多，方向却几乎一致。余弦把长度这个干扰项消掉，只比较「在说什么」。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>用户搜「A-102 型号的替换滤芯」，纯向量检索最可能出的问题是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>完全搜不到任何结果</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>返回一堆语义上是「滤芯」但型号不对的条目</span></button>
+        <button class="opt"><i>C</i><span>返回速度极慢</span></button>
+      </div>
+      <div class="ex">型号这种精确字符串在语义空间里几乎没有区分度。这正是需要 BM25 这类关键词检索来兜底的地方——也是混合检索存在的理由。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>想提升检索质量，优先做哪件事？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>把向量维度从 1024 提到 3072</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>换一个在中文/垂直领域更强的嵌入模型</span></button>
+        <button class="opt"><i>C</i><span>把 chunk 大小从 300 改成 280</span></button>
+      </div>
+      <div class="ex">嵌入模型的质量决定了语义空间本身的好坏，这是天花板。维度只是在这个空间里切得更细，天花板不变时加维度收益有限。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    相似度与归一化的处理参考语雀《深入理解检索增强生成（RAG）的工作机制》；「向量对精确字符串不敏感」这一点在《RAG 关键痛点和解决方案》中被列为首要检索缺陷。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

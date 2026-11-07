@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="reflect">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>自我反思与多轮检索 · RAG 知识体系</title>
+<meta name="description" content="智能体真正比流水线强的地方，不是「能调工具」，而是「知道这一次没调好，再调一次」。这一页讲反思循环、终止条件与多跳检索。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">14</span><span>第五部分 · Agentic RAG</span><span>·</span><span>REFLECT</span></div>
+    <h1>自我反思与多轮检索</h1>
+    <p class="lede">智能体真正比流水线强的地方，不是「能调工具」，而是「知道这一次没调好，再调一次」。这一页讲反思循环、终止条件与多跳检索。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：13 从流水线到智能体</span>
+      <span class="pill">读完接：15 评估铁三角</span>
+      <span class="pill">约 <b>16</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>Agentic RAG · 反思与多跳</span></div>
+      <div><b>不学卡在哪</b><span>检索一次就生成，资料明显不够也硬答；或者放任循环，成本失控。</span></div>
+      <div><b>它解决什么</b><span>能设计带终止条件的反思循环，并用链式检索解决多跳问题。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>检索完先别急着答</h2>
+  <div class="sec">
+    <p>单轮检索最大的问题是<b>没有回头路</b>：查到什么就用什么，哪怕明显不够。智能体可以多做一步——<b>先评估检索结果够不够</b>。</p>    <p>判断依据通常有三条：</p>    <ul>
+      <li><b>覆盖度</b>：问题里的每个子问题都有对应资料吗？</li>
+      <li><b>相关性</b>：资料是在回答问题，还是只是提到了关键词？</li>
+      <li><b>一致性</b>：多份资料之间有矛盾吗？有矛盾说明可能缺关键信息。</li>
+    </ul>    <p>任一不满足，就不生成，而是<b>改写查询再检索一次</b>。</p>
+  </div>
+
+  <h2><span class="n">2</span>一个自我反思的循环</h2>
+  <div class="sec">
+    <div class="flow"><div class="fn"><b>提问</b></div><div class="fa">→</div><div class="fn"><b>检索</b></div><div class="fa">→</div><div class="fn"><b>评估</b>够不够</div><div class="fa">→</div><div class="fn"><b>生成</b>够就答</div><div class="fa">→</div><div class="fn"><b>改写重查</b>不够就回退</div></div>    <p>这个循环必须有<b>终止条件</b>，否则会无限重试：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:20%">终止条件</th><th style="width:26%">取值示例</th><th style="width:54%">作用</th></tr></thead>
+      <tbody>
+        <tr><td>最大轮数</td><td>2–3 轮</td><td>防止无限循环</td></tr>
+        <tr><td>预算上限</td><td>token / 时间 / 费用</td><td>防止单次请求成本失控</td></tr>
+        <tr><td>置信度阈值</td><td>模型自评 ≥ 7 分</td><td>够了就停</td></tr>
+        <tr><td>重复检测</td><td>连续两轮结果高度相似</td><td>说明换说法也没用，应放弃并说明原因</td></tr>
+      </tbody>
+    </table></div>    <div class="note"><p>没有终止条件的 Agent 是事故现场。线上最常见的故障就是「一个刁钻问题让它查了 30 次」，单次请求成本飙到几十块。</p></div>
+  </div>
+
+  <h2><span class="n">3</span>和 Self-RAG 的分工</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:16%"></th><th style="width:42%">Self-RAG</th><th style="width:42%">Agentic 反思</th></tr></thead>
+      <tbody>
+        <tr><td>实现方式</td><td>训练模型输出反思标记</td><td>提示词 + 多轮调用</td></tr>
+        <tr><td>粒度</td><td>标记级（每个片段、每句话）</td><td>轮次级（整次检索是否够用）</td></tr>
+        <tr><td>成本</td><td>训练成本高，推理成本低</td><td>训练零成本，推理成本高（多轮）</td></tr>
+        <tr><td>稳定性</td><td>高（行为被训练固化）</td><td>中（依赖模型当次判断）</td></tr>
+      </tbody>
+    </table></div>    <p>两者不是竞争关系，而是<b>不同预算下的同一目标</b>：有训练资源就做 Self-RAG，没有就用 Agentic 反思先跑起来。后者的好处是可以随时改提示、随时调阈值，迭代快。</p>
+  </div>
+
+  <h2><span class="n">4</span>多跳：让检索变成链式</h2>
+  <div class="sec">
+    <p>Agentic 的另一个能力是<b>串行多步检索</b>，这正是 11 页里「多跳问题」的解法：</p>    <div class="q">问：张三的导师后来创办了哪家公司？<br>第 1 轮：检索「张三 导师」→ 得到「李四」<br>第 2 轮：检索「李四 创办 公司」→ 得到答案</div>    <p>关键在第 1 轮的输出<b>作为第 2 轮的查询输入</b>。这在固定流水线里做不到，因为流水线的查询是用户原始问题，不会中途改变。</p>    <p>代价是延迟翻倍（每轮一次完整检索+生成）。所以多跳通常设上限：<b>最多 2–3 跳</b>，超过就返回「需要更多信息」而不是继续钻。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>单轮检索没有回头路；Agentic 的做法是先评估「够不够」，不够就改写重查。</li>
+      <li>反思循环必须有终止条件：最大轮数、预算上限、置信阈值、重复检测。</li>
+      <li>Self-RAG 是训练方案（低成本推理），Agentic 反思是提示方案（低成本启动），可互相替代。</li>
+      <li>多跳检索靠「上一轮结果作为下一轮查询」实现，通常限制在 2–3 跳。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>反思循环为什么必须有最大轮数限制？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>为了节省存储</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>否则遇到无法回答的问题会无限重试，单次请求成本失控</span></button>
+        <button class="opt"><i>C</i><span>因为模型上下文有限</span></button>
+      </div>
+      <div class="ex">这是线上 Agent 最常见的事故来源。必须同时有轮数上限和预算上限，并在达到上限时明确返回「信息不足」，而不是继续尝试。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>多跳检索与单轮检索的关键差别是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>多跳用了更大的模型</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>上一轮的检索结果会成为下一轮的查询输入</span></button>
+        <button class="opt"><i>C</i><span>多跳不需要向量库</span></button>
+      </div>
+      <div class="ex">这是「链式依赖」：第二跳的查询词不是用户给的，而是第一跳查出来的实体。固定流水线做不到这一点，因为它的查询在开始时就定了。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>没有训练资源时，想实现「检索不够就重查」，应该选？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>Self-RAG</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>提示词 + 多轮调用的 Agentic 反思</span></button>
+        <button class="opt"><i>C</i><span>换一个更大的嵌入模型</span></button>
+      </div>
+      <div class="ex">Self-RAG 需要构造训练数据并微调。Agentic 反思用提示就能跑起来，代价是每轮多一次模型调用、稳定性依赖当次判断。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    反思与多跳的做法参考语雀《从传统 RAG 到 Agentic RAG 的进阶优化》《ReAct 框架原理解析》；终止条件的工程经验为本文补充。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

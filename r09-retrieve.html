@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="retrieve">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>检索：从问题到 Top-K · RAG 知识体系</title>
+<meta name="description" content="在线阶段的第一步。这一页讲清楚三件事：为什么查询和文档必须用同一个模型、Top-K 该怎么定、以及为什么需要一个「查不到」的出口。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">04</span><span>第二部分 · 在线问答</span><span>·</span><span>RETRIEVE</span></div>
+    <h1>检索：从问题到 Top-K</h1>
+    <p class="lede">在线阶段的第一步。这一页讲清楚三件事：为什么查询和文档必须用同一个模型、Top-K 该怎么定、以及为什么需要一个「查不到」的出口。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：03 向量库、0.4 向量</span>
+      <span class="pill">读完接：05 增强</span>
+      <span class="pill">约 <b>16</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>在线第 1 步 · 检索</span></div>
+      <div><b>不学卡在哪</b><span>不知道要设阈值、不知道 K 要分两段取，检索结果里全是弱相关内容却毫无察觉。</span></div>
+      <div><b>它解决什么</b><span>建立「粗召回 + 精排」的意识，并知道如何在检索层处理「没有答案」的情况。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>查询也要变成向量，而且必须是同一个模型</h2>
+  <div class="sec">
+    <p>检索的第一步不是查库，是把用户的问题也送进嵌入模型。这里有一条<b>不能违反的规则</b>：<b>查询和文档必须用同一个嵌入模型、同一个版本</b>。</p>    <p>原因很简单：向量空间是模型定义的。模型 A 说「退货」指向东北，模型 B 可能指向西南。用 A 编码问题、用 B 编码文档，两套坐标系混在一起，相似度计算毫无意义——而且这种错误<b>不会报错</b>，只会表现为「检索结果杂乱无章」。</p>    <div class="note"><p>更换嵌入模型时，必须<b>重建整个向量库</b>。这是 RAG 系统升级时最容易踩的坑：只换了查询侧的模型，忘了重建索引。</p></div>
+  </div>
+
+  <h2><span class="n">2</span>Top-K 定多少</h2>
+  <div class="sec">
+    <p>Top-K 是「取最相似的 K 条」。常见默认值是 3 到 5，但这个数字不是拍脑袋来的，它要同时满足三个约束：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:30%">约束</th><th style="width:40%">说明</th><th style="width:30%">对 K 的影响</th></tr></thead>
+      <tbody>
+        <tr><td>模型能有效利用的上下文</td><td>资料越多，中间部分越容易被忽略（迷失在中间）</td><td>K 不宜大</td></tr>
+        <tr><td>噪声比例</td><td>K 越大，掺进来的弱相关内容越多</td><td>K 不宜大</td></tr>
+        <tr><td>召回覆盖</td><td>真正的答案可能在排名 6–10 的位置</td><td>K 不宜太小</td></tr>
+      </tbody>
+    </table></div>    <p>实践中的做法是<b>两段式</b>：先大 K 召回（20–100），再重排后取小 K（3–5）。这样既不漏，又不会把噪声塞给模型。这就是第 09 页要讲的 Rerank。</p>
+  </div>
+
+  <h2><span class="n">3</span>相似度阈值：给「查不到」一个出口</h2>
+  <div class="sec">
+    <p>如果库里根本没有相关内容，Top-K 仍然会返回 K 条——只是这 K 条都不相关。模型拿到这些垃圾资料，要么硬答，要么被误导。</p>    <p>所以需要一个<b>下限</b>：相似度低于阈值的结果直接丢弃。如果全部低于阈值，就明确告诉用户「知识库中没有相关资料」，而不是让模型去编。</p>    <p>阈值怎么定？<b>不能照抄别人的数字</b>。余弦相似度的分布随模型差异极大：有的模型无关文本也有 0.6，有的只有 0.2。正确做法是在自己的评估集上画一条分布曲线，找「相关」与「不相关」的分界。</p>
+  </div>
+
+  <h2><span class="n">4</span>MMR：为什么需要「多样性」</h2>
+  <div class="sec">
+    <p>纯按相似度排序有一个副作用：<b>返回的结果高度重复</b>。如果库里有 5 份内容几乎相同的制度文件，Top-5 可能全是它们，而真正补充信息的那一条排在第 6 位。</p>    <p>MMR（最大边际相关性）在打分时同时考虑两件事：<b>与问题的相关度</b> 和 <b>与已选结果的差异度</b>。</p>    <div class="q">MMR = argmax [ λ · sim(q, d) − (1−λ) · max sim(d, d<sub>已选</sub>) ]</div>    <p><code>λ</code> 取 1 就是纯相关性，取 0 就是纯多样性，通常取 0.5–0.7。这个参数适合处理「一个问题需要多份不同资料才能答全」的场景，比如「对比 A、B 两个产品的差异」。</p>
+  </div>
+
+  <h2><span class="n">5</span>检索失败的四种典型情形</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:30%">现象</th><th style="width:34%">原因</th><th style="width:36%">对策</th></tr></thead>
+      <tbody>
+        <tr><td>返回结果全不相关</td><td>查询表述与文档表述差异太大（口语 vs 书面）</td><td>查询改写 / HyDE（07 页）</td></tr>
+        <tr><td>相关文档排在第 8 位</td><td>向量相似度分辨率不够</td><td>放大 K + 重排（09 页）</td></tr>
+        <tr><td>返回内容高度重复</td><td>库里有大量近似文档</td><td>MMR / 结果去重</td></tr>
+        <tr><td>专有名词、型号搜不到</td><td>向量对精确字符串不敏感</td><td>混合检索（08 页）</td></tr>
+      </tbody>
+    </table></div>    <p>这四类问题对应四种不同的补丁，<b>不能指望一招解决全部</b>。这也是为什么第三部分要按「检索前 / 检索中 / 检索后」分三段优化——每一段修的是不同的病。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>查询必须与文档用同一嵌入模型、同一版本，否则向量空间错位且不报错。</li>
+      <li>Top-K 受「上下文利用率、噪声比例、召回覆盖」三重约束，所以采用大 K 召回 + 小 K 精排。</li>
+      <li>相似度阈值给「查不到」一个出口，避免模型拿着垃圾资料硬答。阈值要在自己的数据上定。</li>
+      <li>MMR 用相关度与差异度的加权，解决结果高度重复的问题。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>换了嵌入模型但没重建索引，会发生什么？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>系统报错，无法启动</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>查询与文档处于不同向量空间，相似度失去意义，但不会报错</span></button>
+        <button class="opt"><i>C</i><span>检索速度变慢</span></button>
+      </div>
+      <div class="ex">这是最隐蔽的一类故障：没有异常、没有日志，只有「结果莫名其妙」。保证查询侧与索引侧使用同一模型版本，是 RAG 上线检查表上的固定一项。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>为什么通常要「大 K 召回再重排」，而不是直接取 top-3？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>因为向量库最多只能返回 3 条</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>因为正确答案可能排在 6–10 位，先大范围召回再精排能兼顾覆盖与精度</span></button>
+        <button class="opt"><i>C</i><span>因为大 K 更快</span></button>
+      </div>
+      <div class="ex">向量相似度只是粗筛，排序不一定准。大 K 保证不漏，重排模型再用更强的交叉编码把真正相关的挑到前面，最后只把小 K 交给生成模型。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>不设相似度阈值、直接取 top-3 的风险是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>检索速度变慢</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>知识库里没有相关内容时，仍会返回三条不相关的片段，诱导模型硬答</span></button>
+        <button class="opt"><i>C</i><span>向量维度会不匹配</span></button>
+      </div>
+      <div class="ex">没有阈值就没有「查不到」这个状态。系统必须在检索侧就承认「没有」，而不是把判断权交给模型——模型面对不相关资料的默认行为是硬着头皮总结。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    Top-K 与阈值策略参考语雀《RAG 检索优化与实践指南》；MMR 与去重见《RAG 优化相关面试题》。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

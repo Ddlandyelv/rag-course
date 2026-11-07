@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="vstore">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>向量库与索引结构 · RAG 知识体系</title>
+<meta name="description" content="这一步看起来只是「选个数据库」，但索引结构决定了检索的召回率和延迟，元数据过滤决定了权限和时效能不能做。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">03</span><span>第一部分 · 离线索引</span><span>·</span><span>STORE</span></div>
+    <h1>向量库与索引结构</h1>
+    <p class="lede">这一步看起来只是「选个数据库」，但索引结构决定了检索的召回率和延迟，元数据过滤决定了权限和时效能不能做。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：02 分块</span>
+      <span class="pill">读完接：04 检索</span>
+      <span class="pill">约 <b>16</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>离线第 4 步 · 入库</span></div>
+      <div><b>不学卡在哪</b><span>把向量库当成普通数据库用，不理解近似检索的取舍，也不知道过滤条件该放在哪一层。</span></div>
+      <div><b>它解决什么</b><span>能根据数据量与延迟要求选索引，并知道元数据过滤必须下推到检索层。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>向量库不是「带索引的数据库」</h2>
+  <div class="sec">
+    <p>普通数据库解决的是「<b>精确查找</b>」：<code>WHERE id = 123</code>，要么命中要么没有。向量库解决的是「<b>最近邻查找</b>」：给我和这个向量最像的 K 条。这两件事的底层算法完全不同。</p>    <div class="def">
+      <div class="def-h">向量数据库要做的事<span class="loc">最近邻检索</span></div>
+          <p>在几百万到几十亿条高维向量里，用<b>毫秒级</b>时间找出与查询向量最相似的 K 条，同时支持按元数据过滤（部门、时间、类型）。</p>    <p>难点在于：高维空间里没有「树」这种结构能有效剪枝（维度灾难），所以必须用<b>近似</b>算法——牺牲一点点召回率，换几个数量级的速度。</p>
+    </div>
+  </div>
+
+  <h2><span class="n">2</span>四种索引结构，一个取舍</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:20%">索引</th><th style="width:40%">原理一句话</th><th style="width:13%">召回率</th><th style="width:13%">速度</th><th style="width:14%">内存</th></tr></thead>
+      <tbody>
+        <tr><td><b>Flat</b>（暴力）</td><td>和每一条都比一遍</td><td>100%（精确）</td><td>最慢</td><td>低</td></tr>
+        <tr><td><b>IVF</b>（倒排）</td><td>先聚类，只在最近的几个簇里找</td><td>中高，可调</td><td>快</td><td>中</td></tr>
+        <tr><td><b>HNSW</b>（图）</td><td>建一张近邻图，像走高速一样跳着找</td><td>高</td><td>很快</td><td>高</td></tr>
+        <tr><td><b>PQ</b>（量化）</td><td>把向量压缩成短码，用近似距离比</td><td>较低</td><td>最快</td><td>很低</td></tr>
+      </tbody>
+    </table></div>    <p>实际系统经常<b>组合使用</b>：HNSW + PQ（图索引 + 向量压缩），在大规模下兼顾速度与内存。</p>    <p>选择的关键不是「哪个最好」，而是<b>你的数据量和延迟要求</b>：10 万条以内用 Flat 就够（精确且简单）；百万级用 HNSW；上亿级才需要认真考虑量化与分片。</p>
+  </div>
+
+  <h2><span class="n">3</span>元数据过滤：一个容易被低估的坑</h2>
+  <div class="sec">
+    <p>真实查询几乎都带过滤条件：「近三个月」「本部门」「只看产品文档」。这就带来一个设计问题：<b>先过滤再检索，还是先检索再过滤</b>？</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:22%">策略</th><th style="width:32%">做法</th><th style="width:46%">风险</th></tr></thead>
+      <tbody>
+        <tr><td>先检索后过滤</td><td>先取 top-100，再按条件筛</td><td>筛完可能只剩 3 条，甚至全被筛掉</td></tr>
+        <tr><td>先过滤后检索</td><td>先按条件缩小范围，再在子集里找最近邻</td><td>需要索引支持「带过滤的检索」，否则很慢</td></tr>
+        <tr><td>混合（主流）</td><td>过滤条件下推到索引层，边走图边判断</td><td>实现复杂，但对效果和性能都友好</td></tr>
+      </tbody>
+    </table></div>    <p>如果数据库不支持带过滤的近似检索，一个实用兜底是：<b>把 top-K 放大</b>（如 100），再过滤到目标数量。代价是延迟上升，但至少不会返回空结果。</p>
+  </div>
+
+  <h2><span class="n">4</span>选型：先看部署形态，再看性能</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:26%">方案</th><th style="width:24%">形态</th><th style="width:50%">适合</th></tr></thead>
+      <tbody>
+        <tr><td><b>pgvector</b></td><td>PostgreSQL 扩展</td><td>已有 PG、数据量百万级以内、想少一个组件</td></tr>
+        <tr><td><b>Chroma</b></td><td>嵌入式 / 轻量服务</td><td>原型验证、单机小规模</td></tr>
+        <tr><td><b>Milvus</b></td><td>分布式专用向量库</td><td>亿级规模、需要水平扩展</td></tr>
+        <tr><td><b>Qdrant / Weaviate</b></td><td>专用向量库</td><td>需要强过滤、混合检索、多租户</td></tr>
+        <tr><td><b>Elasticsearch / OpenSearch</b></td><td>搜索引擎的向量能力</td><td>已有 ES，想要关键词 + 向量一体</td></tr>
+        <tr><td><b>FAISS</b></td><td>库（非服务）</td><td>离线批处理、自己搭服务</td></tr>
+      </tbody>
+    </table></div>    <p>一个务实的判断顺序：<b>数据量 → 是否要混合检索 → 团队已有的技术栈</b>。多数团队最后一轮比较下来，选的是「已有组件的向量能力」而不是引入新组件——少一个需要运维的系统，比多 20% 的性能更值。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>向量库解决的是近似最近邻检索，不是精确查找。</li>
+      <li>四种索引（Flat/IVF/HNSW/PQ）在召回率、速度、内存之间取舍，常组合使用。</li>
+      <li>10 万条以内 Flat 就够；百万级用 HNSW；上亿才需要认真做量化与分片。</li>
+      <li>元数据过滤要尽量下推到索引层，否则「先检索后过滤」很容易筛空。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>为什么向量检索几乎都用「近似」算法？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>精确算法在数学上不存在</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>高维空间无法有效剪枝，精确检索的代价随数据量线性上升，无法接受</span></button>
+        <button class="opt"><i>C</i><span>近似算法结果更准</span></button>
+      </div>
+      <div class="ex">经典的树形索引在低维有效，高维会退化成全扫描（维度灾难）。近似算法牺牲少量召回率，换来几个数量级的速度提升，工程上这笔交易划算。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>「先检索 top-100 再按部门过滤」最可能出的问题是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>检索会变慢</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>过滤后可能只剩几条甚至零条，因为 top-100 里本部门的文档很少</span></button>
+        <button class="opt"><i>C</i><span>向量维度会错乱</span></button>
+      </div>
+      <div class="ex">这正是需要「带过滤的检索」（filtered search）的原因：把条件下推到索引层，在符合条件的子集里找最近邻，而不是先取全局 top-K 再筛。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>数据量约 50 万条、要求精确召回、可接受稍慢，优先选？</div>
+      <div class="opts">
+        <button class="opt" data-ok="1"><i>A</i><span>Flat 暴力检索</span></button>
+        <button class="opt"><i>B</i><span>PQ 量化索引</span></button>
+        <button class="opt"><i>C</i><span>先做 IVF 再 PQ</span></button>
+      </div>
+      <div class="ex">50 万条用 Flat 仍在可接受范围，且能拿到 100% 召回，省掉了调参和精度损失。数据量再上一个数量级才需要引入近似索引。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    索引结构与选型对比参考语雀《如何实现一个 RAG 架构》；带过滤检索的问题在《RAG 关键痛点和解决方案》中有专门讨论。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

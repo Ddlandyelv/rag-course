@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="chunk0">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>分块：为什么要切碎 · RAG 知识体系</title>
+<meta name="description" content="RAG 里最不起眼、却最影响效果的一步。这一页回答三个问题：为什么必须切、切多大合适、重叠到底在解决什么。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">0.5</span><span>第零幕 · 为什么需要 RAG</span><span>·</span><span>CONCEPT</span></div>
+    <h1>分块：为什么要切碎</h1>
+    <p class="lede">RAG 里最不起眼、却最影响效果的一步。这一页回答三个问题：为什么必须切、切多大合适、重叠到底在解决什么。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：0.4</span>
+      <span class="pill">读完接：01 数据解析</span>
+      <span class="pill">约 <b>14</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>离线第 2 步 · 分块</span></div>
+      <div><b>不学卡在哪</b><span>不知道分块的取舍，就会照抄一个 chunk_size=1000 的默认值，然后困惑为什么检索不准。</span></div>
+      <div><b>它解决什么</b><span>建立「块大小 ↔ 检索精度 ↔ 上下文完整性」三者的权衡直觉。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>为什么不直接把整篇文档塞给模型</h2>
+  <div class="sec">
+    <p>既然模型能读长文，为什么还要切碎？三个理由，一个比一个硬：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:24%">理由</th><th style="width:56%">具体是什么</th><th style="width:20%">有多硬</th></tr></thead>
+      <tbody>
+        <tr><td>上下文窗口装不下</td><td>一份产品手册 300 页、一个知识库 10 万份文档，任何模型都装不下</td><td><b>物理限制</b></td></tr>
+        <tr><td>成本随长度线性上涨</td><td>每次提问都塞 10 万字，token 费用和延迟都会失控</td><td><b>经济限制</b></td></tr>
+        <tr><td>无关内容会干扰判断</td><td>资料里 95% 与问题无关时，关键那一句容易被淹没</td><td><b>效果限制</b></td></tr>
+      </tbody>
+    </table></div>    <p>第三条最容易被低估。有一个现象叫「<b>迷失在中间</b>」（Lost in the Middle）：给模型的资料越长，它对<b>开头和结尾</b>的内容记得最清楚，夹在中间的容易被忽略。所以「多给点总没坏处」是错的——给多了反而会降低准确率。</p>
+  </div>
+
+  <h2><span class="n">2</span>切多大：一个没有标准答案的取舍</h2>
+  <div class="sec">
+    <p>块太小，语义不完整；块太大，噪声多、检索不准。这是一条此消彼长的曲线：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:18%">块大小</th><th style="width:28%">好处</th><th style="width:30%">坏处</th><th style="width:24%">适合</th></tr></thead>
+      <tbody>
+        <tr><td>很小（100–200 字）</td><td>语义集中，检索命中率高</td><td>缺乏上下文，模型看不懂「它」指谁</td><td>FAQ、定义条目</td></tr>
+        <tr><td>中等（300–600 字）</td><td>兼顾精度与上下文</td><td>需要调，不同文档最优点不同</td><td>通用默认</td></tr>
+        <tr><td>很大（1000+ 字）</td><td>上下文完整</td><td>噪声多，向量被稀释，检索变钝</td><td>法律条文、长论述</td></tr>
+      </tbody>
+    </table></div>    <p>工程上的默认起点通常是 <b>300–500 字 + 10%–20% 重叠</b>，然后<b>用评估集去调</b>。脱离评估谈块大小没有意义——这是第 15、16 页要解决的问题。</p>
+  </div>
+
+  <h2><span class="n">3</span>重叠（overlap）在解决什么</h2>
+  <div class="sec">
+    <p>如果严格按 500 字切，会出现这种情况：</p>    <div class="q">…块 1 结尾：<b>「员工出差的住宿标准，一线城市为每晚 500 元，二线</b><br>块 2 开头：<b>城市为 350 元，三线及以下为 200 元。」</b></div>    <p>用户问「二线城市住宿标准」，检索可能只命中块 2，而块 2 开头缺少「住宿标准」这个主语，模型只能猜。如果命中块 1，又缺了具体数字。</p>    <p>重叠就是让相邻块共享一部分内容，保证<b>被切断的句子至少在一块里是完整的</b>。代价是存储变大、检索结果可能出现重复片段（需要在后处理去重）。</p>    <div class="note"><p>重叠不是越多越好。20% 左右通常够用；超过 50% 时，检索出来的 5 块可能实际只有 3 块的信息量，反而浪费了 top-K 名额。</p></div>
+  </div>
+
+  <h2><span class="n">4</span>切分方式决定了下游一切</h2>
+  <div class="sec">
+    <p>「每隔 500 字切一刀」是最差的做法。常见的好一些的做法：</p>    <ul>
+      <li><b>按段落切</b>：段落本身就是语义单元，天然合适；</li>
+      <li><b>按标题层级切</b>：Markdown 的 <code>##</code>、<code>###</code> 是作者划好的语义边界；</li>
+      <li><b>递归切分</b>：先按段落，太长再按句子，再长才按字符硬切——LangChain 的 <code>RecursiveCharacterTextSplitter</code> 就是这个思路；</li>
+      <li><b>语义切分</b>：计算相邻句子的向量相似度，在「话题变了」的地方断开。</li>
+    </ul>    <p>这些方法的细节和取舍，在 <b>02 分块策略的取舍</b> 一页展开。这里只需要记住一句：<b>分块是 RAG 里最便宜的优化点，也是最容易被敷衍的一步</b>。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>必须分块的三个理由：窗口装不下、成本随长度上涨、无关内容干扰判断。</li>
+      <li>块大小是取舍：小则准但缺上下文，大则全但噪声多。默认起点 300–500 字。</li>
+      <li>重叠保证被切断的句子至少在一块里完整，代价是存储与重复。</li>
+      <li>分块是最便宜的优化点，按段落/标题/递归切，远好于按字符数硬切。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>「迷失在中间」现象说明什么？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>模型无法处理长文本</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>资料越长，夹在中间的内容越容易被忽略，多给不一定更好</span></button>
+        <button class="opt"><i>C</i><span>中间的内容会被模型删除</span></button>
+      </div>
+      <div class="ex">这是注意力分配的经验现象：开头和结尾的权重更高。所以工程上要控制塞进去的片段数量，并把最相关的放在靠前或靠后的位置。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>overlap 设成 50% 会有什么副作用？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>检索会更准</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>top-K 里出现大量重复内容，实际信息量下降</span></button>
+        <button class="opt"><i>C</i><span>向量维度会翻倍</span></button>
+      </div>
+      <div class="ex">重叠过大时，相邻块内容高度相似，检索出的 5 条可能只覆盖 2 个独立信息点。通常 10%–20% 足够，且需要在结果里做去重。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>下面哪种分块方式最不可取？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>按 Markdown 标题层级切</span></button>
+        <button class="opt"><i>B</i><span>按自然段落切</span></button>
+        <button class="opt" data-ok="1"><i>C</i><span>固定每 500 个字符切一刀</span></button>
+      </div>
+      <div class="ex">按固定字符数硬切完全无视语义边界，最容易把句子、表格、代码块从中间劈开。如果必须按长度切，至少应该用「递归」策略，从段落开始逐级降级。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    块大小与 overlap 的工程经验值参考语雀《大模型 RAG 文本分块面试题》；「迷失在中间」的讨论见《RAG 优化相关面试题》。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

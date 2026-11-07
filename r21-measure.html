@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="measure">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>怎么测：数据集与裁判 · RAG 知识体系</title>
+<meta name="description" content="指标定了，接下来是工程问题：测试集从哪来、谁来打分、结果怎么用。这一页给出可执行的一套流程。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">16</span><span>第六部分 · 评估</span><span>·</span><span>MEASURE</span></div>
+    <h1>怎么测：数据集与裁判</h1>
+    <p class="lede">指标定了，接下来是工程问题：测试集从哪来、谁来打分、结果怎么用。这一页给出可执行的一套流程。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：15 评估铁三角</span>
+      <span class="pill">读完接：术语表</span>
+      <span class="pill">约 <b>17</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>评估 · 落地流程</span></div>
+      <div><b>不学卡在哪</b><span>没有固定测试集，每次改动凭感觉判断，几周后说不清哪些优化真的有效。</span></div>
+      <div><b>它解决什么</b><span>能搭起「合成 + 抽检 → 校准裁判 → 分层回归」的最小评估闭环。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>先有测试集，才谈得上评估</h2>
+  <div class="sec">
+    <p>没有测试集，所有「效果变好了」都是感觉。而手工写 200 道题的成本很高，所以工业界普遍用<b>自动合成</b>：</p>    <ol>
+      <li>从知识库里随机取一块作为「根上下文」；</li>
+      <li>检索它相邻的 K 块，拼成一段更完整的上下文；</li>
+      <li>让模型基于这段上下文出题 + 出答案；</li>
+      <li>重复 N 次，得到 N 条「问题 + 标准答案 + 依据片段」的三元组。</li>
+    </ol>    <p>合成时要加约束，否则会产出一堆低质题：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:46%">约束</th><th style="width:54%">目的</th></tr></thead>
+      <tbody>
+        <tr><td>问题必须脱离上下文也能被人类读懂</td><td>避免出现「根据上文，它指什么」这类废题</td></tr>
+        <tr><td>答案不能包含链接、代码块</td><td>避免无法判分</td></tr>
+        <tr><td>不要在问题里出现「根据提供的资料」</td><td>避免泄露题型</td></tr>
+        <tr><td>问题控制在 10 个词以内、尽可能具体</td><td>避免过于宽泛、无法判定对错</td></tr>
+        <tr><td>避免用「和」连接多个问题</td><td>避免一个问题包含多个子目标，难以判定</td></tr>
+      </tbody>
+    </table></div>    <div class="note"><p>合成题目的质量决定了评估的天花板。所以合成之后必须<b>人工抽检 10%–20%</b>，把明显不合理的剔掉，否则你会一直在优化一个错误的目标。</p></div>
+  </div>
+
+  <h2><span class="n">2</span>谁来打分：人还是模型</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:18%">方式</th><th style="width:16%">成本</th><th style="width:26%">一致性</th><th style="width:40%">适合</th></tr></thead>
+      <tbody>
+        <tr><td>人工标注</td><td>极高</td><td>中（不同人标准不同）</td><td>建立基准、校准模型裁判</td></tr>
+        <tr><td>LLM 裁判</td><td>低</td><td>高（同一提示下稳定）</td><td>批量回归测试、日常迭代</td></tr>
+        <tr><td>规则匹配</td><td>极低</td><td>完美但僵硬</td><td>有标准答案的短答案题</td></tr>
+        <tr><td>用户反馈</td><td>零（但需埋点）</td><td>真实但有偏</td><td>线上效果监控</td></tr>
+      </tbody>
+    </table></div>    <p>实践中的组合是：<b>人工标 100–200 条作为「黄金集」，用它校准 LLM 裁判的提示与阈值</b>，之后所有迭代都用 LLM 裁判跑全量。</p>    <p>校准这一步不能省。做法是：让 LLM 裁判和人工在同一批样本上打分，计算一致性（如 Spearman 相关）。如果一致性低于 0.7，说明裁判提示写得不好，结论不可信。</p>
+  </div>
+
+  <h2><span class="n">3</span>怎么用结果定位问题</h2>
+  <div class="sec">
+    <p>有了三个指标，定位就变成查表：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:14%">上下文相关性</th><th style="width:12%">忠实度</th><th style="width:14%">答案相关性</th><th style="width:30%">判断</th><th style="width:30%">先改哪里</th></tr></thead>
+      <tbody>
+        <tr><td>低</td><td>—</td><td>—</td><td>检索没找对</td><td>改写、混合检索、重排</td></tr>
+        <tr><td>高</td><td>低</td><td>—</td><td>资料对了，模型在编</td><td>提示词约束、降低温度、换更强模型</td></tr>
+        <tr><td>高</td><td>高</td><td>低</td><td>资料对、没编，但答非所问</td><td>检查提示词是否误解了问题、检查是否被无关段落带偏</td></tr>
+        <tr><td>高</td><td>高</td><td>高</td><td>指标都好但用户不满</td><td>查时效、格式、覆盖率</td></tr>
+      </tbody>
+    </table></div>    <p>这张表的价值在于：<b>它把「优化」变成了「按指标查方向」</b>，而不是每次改一个地方然后祈祷。</p>
+  </div>
+
+  <h2><span class="n">4</span>回归测试：改一个参数，跑一遍全集</h2>
+  <div class="sec">
+    <p>RAG 的参数是互相影响的：改了 chunk_size，检索分布会变；换了嵌入模型，阈值要重定；加了重排，top-K 也要调。所以每次改动都应该：</p>    <ol>
+      <li>固定测试集（同一批问题）；</li>
+      <li>跑全量，记录三个指标；</li>
+      <li>和上一版对比，看是整体提升还是某些类型提升、某些类型变差。</li>
+      <li></li>
+    </ol>    <p>第三步最关键。<b>只看平均值会掩盖问题</b>：如果总分涨了 2 分，但「多跳类问题」掉了 10 分，这个改动在真实场景里可能是负面的。所以测试集要<b>按问题类型分层</b>统计。</p>    <div class="note"><p>一个最低成本的实践：把每次改动的指标记进一张表（版本 / 参数 / 三个指标 / 分层结果）。两三周后回头看，你会非常清楚哪些改动真的有效——这比任何直觉都可靠。</p></div>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>测试集可以自动合成，但必须人工抽检，否则在优化一个错误的目标。</li>
+      <li>人工标注建黄金集，校准 LLM 裁判，之后用裁判跑全量。</li>
+      <li>三指标的组合能直接定位「检索错 / 生成编 / 答非所问 / 都不对」。</li>
+      <li>每次改动跑同一批测试集，并按问题类型分层看，不要只看平均值。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>为什么合成测试集后还要人工抽检？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>为了凑够数量</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>合成题可能存在无法判定、过于宽泛或泄露答案的问题，不抽检就会优化错误目标</span></button>
+        <button class="opt"><i>C</i><span>因为模型不能出题</span></button>
+      </div>
+      <div class="ex">合成题的典型缺陷是「问题脱离上下文读不懂」「答案无法判定对错」。如果测试集本身有问题，指标再漂亮也不代表真实效果。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>三个指标里「上下文相关性高、忠实度高、答案相关性低」，最可能的问题是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>检索错了</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>资料对、没编造，但答案没有正面回应用户的核心诉求</span></button>
+        <button class="opt"><i>C</i><span>模型太小</span></button>
+      </div>
+      <div class="ex">前两个指标说明「资料找对了且答案忠于资料」，答案相关性低说明「答的不是用户问的」。常见原因是提示词让模型误解了任务，或被某段次要资料带偏。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>为什么评估结果要按问题类型分层统计？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>因为总量太大</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>只看平均值会掩盖「某类问题变差」的情况，而这类问题可能正是核心场景</span></button>
+        <button class="opt"><i>C</i><span>因为分层计算更快</span></button>
+      </div>
+      <div class="ex">平均值上涨 2 分，可能来自简单问题提升 5 分、多跳问题下降 10 分。如果业务主要是多跳问题，这个改动实际上是负面的。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    测试集合成与提示约束参考语雀《大模型 RAG 评测面试题》《如何评估 RAG》；分层回归与裁判校准为工程实践补充。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

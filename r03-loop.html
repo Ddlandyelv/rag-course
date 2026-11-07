@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="loop">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>一个 RAG 系统的最小闭环 · RAG 知识体系</title>
+<meta name="description" content="把 RAG 拆到最小，只有两条线七个动作。这一页给出完整骨架，并标出每一步最典型的失败方式——后面每个部分，都是在给其中某一步打补丁。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">0.3</span><span>第零幕 · 为什么需要 RAG</span><span>·</span><span>PIPELINE</span></div>
+    <h1>一个 RAG 系统的最小闭环</h1>
+    <p class="lede">把 RAG 拆到最小，只有两条线七个动作。这一页给出完整骨架，并标出每一步最典型的失败方式——后面每个部分，都是在给其中某一步打补丁。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：0.1、0.2</span>
+      <span class="pill">读完接：0.4 向量</span>
+      <span class="pill">约 <b>16</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>全链路地图 · 后面所有内容都挂在这张图上</span></div>
+      <div><b>不学卡在哪</b><span>不知道自己卡在哪一步，优化时东改一下西改一下，改完不知道有没有变好。</span></div>
+      <div><b>它解决什么</b><span>给出七个动作和各自失效方式，让「效果不好」变成可定位的问题。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>整条链路只有两条线</h2>
+  <div class="sec">
+    <p>不管后面加多少优化，RAG 系统的骨架永远是两条线：</p>    <div class="def">
+      <div class="def-h">离线阶段（Indexing）<span class="loc">平时做</span></div>
+          <p>把一堆杂乱的文件，变成「能被快速查到的知识库」。这条线只跑一次，或者定期跑。</p>    <p>代表动作：<b>解析 → 分块 → 向量化 → 入库</b>。</p>
+    </div>    <div class="def">
+      <div class="def-h">在线阶段（Retrieval &amp; Generation）<span class="loc">考时做</span></div>
+          <p>用户提问的那一刻开始跑，必须在一秒左右结束。</p>    <p>代表动作：<b>检索 → 增强 → 生成</b>。</p>
+    </div>    <p>这两条线的关系是：<b>离线的质量决定了在线的上限</b>。如果文档解析漏了表格、分块切断了句子、向量模型不懂你的领域，在线阶段无论怎么优化提示词都救不回来。</p>
+  </div>
+
+  <h2><span class="n">2</span>离线：四步，一步都不能省</h2>
+  <div class="sec">
+    <div class="flow"><div class="fn"><b>① 解析</b>PDF/Word/网页 → 纯文本</div><div class="fa">→</div><div class="fn"><b>② 分块</b>长文 → 小卡片</div><div class="fa">→</div><div class="fn"><b>③ 向量化</b>文字 → 数字坐标</div><div class="fa">→</div><div class="fn"><b>④ 入库</b>坐标 + 原文 → 向量库</div></div>
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:14%">步骤</th><th style="width:38%">做什么</th><th style="width:26%">典型失败</th><th style="width:22%">后果</th></tr></thead>
+      <tbody>
+        <tr><td>① 数据解析</td><td>提取文字、表格结构、图片里的文字；去掉页眉页脚、乱码、广告</td><td>扫描件没 OCR、表格被拍平成一行字符串</td><td>后面全错，且很难察觉</td></tr>
+        <tr><td>② 文档分块</td><td>把长文切成几百字的片段，相邻片段保留重叠</td><td>从句子中间切断、把标题和正文分开</td><td>检索到的片段看不懂</td></tr>
+        <tr><td>③ 向量化</td><td>用嵌入模型把每块文字变成向量</td><td>用了通用模型，不懂行业术语</td><td>语义相近的查不到</td></tr>
+        <tr><td>④ 入库</td><td>向量 + 原文 + 元数据存进向量库，建索引</td><td>没存元数据（来源、页码、部门）</td><td>无法溯源、无法做权限过滤</td></tr>
+      </tbody>
+    </table></div>    <div class="note"><p>一句话总结这条线的价值：<b>「垃圾进，垃圾出」</b>。RAG 效果差的时候，八成问题出在这一半，而不是模型。</p></div>
+  </div>
+
+  <h2><span class="n">3</span>在线：三步，每一步都可能翻车</h2>
+  <div class="sec">
+    <div class="flow"><div class="fn"><b>① 检索</b>问题 → 向量 → Top-K</div><div class="fa">→</div><div class="fn"><b>② 增强</b>片段填入提示词模板</div><div class="fa">→</div><div class="fn"><b>③ 生成</b>模型读资料作答</div></div>
+    <p>以「我们公司出差住宿的报销标准是多少」为例，走一遍：</p>    <ol>
+      <li><b>检索</b>：用同一个嵌入模型把问题变成向量，去库里比对，取最相似的 3 到 5 块。</li>
+      <li><b>增强</b>：把这些片段填进一个预设模板的「参考资料」区，问题填进「提问」区，再加一句约束：「严格依据资料回答，资料未提及请回答不知道」。</li>
+      <li><b>生成</b>：模型读完资料，组织成一句通顺的话。</li>
+    </ol>    <p>三步各自的翻车方式完全不同，这也是后面要分三个环节优化的原因：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:12%">环节</th><th style="width:44%">典型翻车</th><th style="width:44%">该往哪优化</th></tr></thead>
+      <tbody>
+        <tr><td>检索</td><td>资料没找出来，或找出来的是无关内容</td><td>改写查询、混合检索、重排</td></tr>
+        <tr><td>增强</td><td>资料太多把关键信息淹了、模板没约束住</td><td>压缩上下文、调整模板、控制顺序</td></tr>
+        <tr><td>生成</td><td>资料对，模型答歪了或夹带私货</td><td>强化约束、要求引用、Self-RAG 校验</td></tr>
+      </tbody>
+    </table></div>    <p>很多团队一遇到效果不好就去改提示词，其实应该先看<b>检索出来的那几块到底对不对</b>。如果资料本身就是错的，提示词写得再漂亮也只是让错误答案更通顺。</p>
+  </div>
+
+  <h2><span class="n">4</span>这五步，就是后面五个部分</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:30%">本课部分</th><th style="width:26%">对应链路</th><th style="width:44%">要解决的问题</th></tr></thead>
+      <tbody>
+        <tr><td>第一部分 · 离线索引</td><td>解析、分块、向量化、入库</td><td>怎么把资料整理成「好查」的状态</td></tr>
+        <tr><td>第二部分 · 在线问答</td><td>检索、增强、生成</td><td>怎么把资料「用对」</td></tr>
+        <tr><td>第三部分 · Advanced RAG</td><td>在三个环节上加优化</td><td>朴素方案不够用时的系统性补强</td></tr>
+        <tr><td>第四部分 · Graph RAG</td><td>改变知识的组织形态</td><td>跨越文档的全局性问题</td></tr>
+        <tr><td>第五部分 · Agentic RAG</td><td>改变控制流</td><td>让系统自己决定查什么、查几次</td></tr>
+        <tr><td>第六部分 · 评估</td><td>横切所有环节</td><td>判断问题到底出在检索还是生成</td></tr>
+      </tbody>
+    </table></div>    <p>注意最后一行：<b>评估是横切的</b>。没有评估，你在做优化时无法判断改动是变好还是变坏，只能凭感觉调参——这是 RAG 项目最常见的死法。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>RAG 只有两条线：离线建库（解析→分块→向量化→入库）、在线问答（检索→增强→生成）。</li>
+      <li>离线质量决定在线上限；在线效果差时，先查检索出来的原文片段对不对。</li>
+      <li>三个环节的失效方式不同，优化手段也不同，不能用提示词去补检索的锅。</li>
+      <li>评估横切所有环节，没有评估的优化都是瞎调。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>线上效果不好，第一步应该查什么？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>立刻改提示词</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>把检索到的原文片段打印出来，看它们是否真的回答了问题</span></button>
+        <button class="opt"><i>C</i><span>换一个更大的模型</span></button>
+      </div>
+      <div class="ex">先定位是「资料错」还是「模型没用对」。如果检索出来的片段就是不相关的，改提示词毫无意义。这是 RAG 调试最基本的一条纪律。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>离线阶段漏做「元数据入库」（来源、页码、部门），会导致什么？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>检索速度变慢</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>无法标注答案出处，也无法按权限过滤文档</span></button>
+        <button class="opt"><i>C</i><span>向量维度会下降</span></button>
+      </div>
+      <div class="ex">元数据不影响相似度计算，但它决定了两个能力：可溯源（告诉用户「依据在哪」）和权限隔离（A 部门查不到 B 部门）。企业落地时这两条往往比准确率更优先。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>「相邻片段保留重叠」的直接目的是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>减少存储体积</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>避免一句话被切断后，两边的片段都读不懂</span></button>
+        <button class="opt"><i>C</i><span>提高向量维度</span></button>
+      </div>
+      <div class="ex">分块边界必然有损失。overlap 让被切断的句子在两块里各保留一部分，至少有一块能读懂。代价是存储和检索结果里会出现重复内容。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    流程划分参考语雀《详细说下 RAG 的流程》《RAG 系统的核心组件及工作逻辑》两篇；「失败点定位」部分结合《RAG 关键痛点和解决方案》整理。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

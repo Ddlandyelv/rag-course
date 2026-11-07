@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="gloss">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>术语表 · RAG 知识体系</title>
+<meta name="description" content="全课出现的名词按链路位置分组。读到陌生词时回这里查，比翻前面某一页快。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">A</span><span>附录</span><span>·</span><span>GLOSSARY</span></div>
+    <h1>术语表</h1>
+    <p class="lede">全课出现的名词按链路位置分组。读到陌生词时回这里查，比翻前面某一页快。</p>
+    <div class="meta-row">
+      <span class="pill acc">随时可查</span>
+      <span class="pill">共 <b>36</b> 个术语</span>
+      <span class="pill">约 <b>8</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>横切 · 术语速查</span></div>
+      <div><b>不学卡在哪</b><span>读到陌生缩写要回翻前面的页面，打断阅读节奏。</span></div>
+      <div><b>它解决什么</b><span>把索引、检索、架构、评估四类术语集中到一处。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>按链路分组</h2>
+  <div class="sec">
+    <p>术语按它在流水线上的位置分成四组。同一组内的词经常一起出现，记忆时可以按组记，比按字母顺序有效得多。</p>
+  </div>
+
+  <h2><span class="n">2</span>基础</h2>
+  <div class="gl"><div class="gl-row"><div class="gl-t">RAG</div><div class="gl-d">检索增强生成。提问时先从外部知识库检索相关片段，再连同问题一起交给模型生成答案。</div></div><div class="gl-row"><div class="gl-t">朴素 RAG / Naive RAG</div><div class="gl-d">只做「分块→向量化→检索→拼提示」的最小实现，没有额外优化。</div></div><div class="gl-row"><div class="gl-t">幻觉</div><div class="gl-d">模型生成看似合理但不符合事实的内容。机制上源于「输出概率上像样的续写」而非「核实事实」。</div></div><div class="gl-row"><div class="gl-t">嵌入 / Embedding</div><div class="gl-d">把文本映射成固定长度向量，使语义相近的输入在空间中方向相近。</div></div><div class="gl-row"><div class="gl-t">余弦相似度</div><div class="gl-d">两个向量夹角的余弦值，取值 −1 到 1。只看方向，不受向量长度影响。</div></div><div class="gl-row"><div class="gl-t">上下文窗口</div><div class="gl-d">模型单次能处理的 token 上限。超出部分无法利用。</div></div><div class="gl-row"><div class="gl-t">迷失在中间 / Lost in the Middle</div><div class="gl-d">资料越长，模型对开头与结尾的内容权重更高，中间部分容易被忽略。</div></div></div>
+
+  <h2><span class="n">3</span>索引侧</h2>
+  <div class="gl"><div class="gl-row"><div class="gl-t">ETL / 数据解析</div><div class="gl-d">从 PDF、Word、表格、网页中抽取文字与结构。是整条链路唯一不可逆的一步。</div></div><div class="gl-row"><div class="gl-t">分块 / Chunking</div><div class="gl-d">把长文档切成适合检索的小片段。</div></div><div class="gl-row"><div class="gl-t">chunk_size</div><div class="gl-d">单个片段的目标长度。中文场景常按字符计，起点 300–500 字。</div></div><div class="gl-row"><div class="gl-t">overlap</div><div class="gl-d">相邻片段的重叠长度，保证被切断的句子至少在一块里完整。常取 10%–20%。</div></div><div class="gl-row"><div class="gl-t">递归切分</div><div class="gl-d">按「段落 → 句子 → 词 → 字符」逐级降级切分。中文需显式加入「。！？；」等分隔符。</div></div><div class="gl-row"><div class="gl-t">父子分块</div><div class="gl-d">小块用于检索匹配，命中后返回其所属的大块给模型。解耦检索精度与上下文完整性。</div></div><div class="gl-row"><div class="gl-t">HNSW</div><div class="gl-d">基于图的近似最近邻索引，速度快、召回高、内存占用较大。</div></div><div class="gl-row"><div class="gl-t">IVF / PQ</div><div class="gl-d">倒排索引 / 乘积量化。前者先聚类再局部搜索，后者压缩向量以省内存。</div></div></div>
+
+  <h2><span class="n">4</span>检索侧</h2>
+  <div class="gl"><div class="gl-row"><div class="gl-t">Top-K</div><div class="gl-d">取相似度最高的 K 条结果。通常会「大 K 召回 + 重排后取小 K」。</div></div><div class="gl-row"><div class="gl-t">BM25</div><div class="gl-d">经典关键词检索算法，按词频与逆文档频率打分。对精确字符串敏感。</div></div><div class="gl-row"><div class="gl-t">混合检索 / Hybrid Search</div><div class="gl-d">向量检索与关键词检索并行，再融合结果。</div></div><div class="gl-row"><div class="gl-t">RRF</div><div class="gl-d">倒数排名融合。只用排名不用分数，避免两路分数量纲不一致。</div></div><div class="gl-row"><div class="gl-t">RAG Fusion</div><div class="gl-d">把一个问题改写成多个查询分别检索，再用 RRF 融合。</div></div><div class="gl-row"><div class="gl-t">重排 / Rerank</div><div class="gl-d">用交叉编码器对「问题 + 每条候选」逐条精算相关度，精度高但不能预计算。</div></div><div class="gl-row"><div class="gl-t">Bi-encoder / Cross-encoder</div><div class="gl-d">分别编码 / 拼接编码。前者可预计算用于召回，后者精度高用于精排。</div></div><div class="gl-row"><div class="gl-t">MMR</div><div class="gl-d">最大边际相关性。在相关性与结果多样性之间加权，缓解结果重复。</div></div><div class="gl-row"><div class="gl-t">查询改写 / Query Rewriting</div><div class="gl-d">结合对话历史把指代、省略补全，使问句适合检索。</div></div><div class="gl-row"><div class="gl-t">HyDE</div><div class="gl-d">先让模型编一个假答案，用假答案的向量去检索真文档。解决问句与文档形态差异。</div></div><div class="gl-row"><div class="gl-t">上下文压缩</div><div class="gl-d">按句子相关度裁剪片段，减少无关内容占用上下文。</div></div></div>
+
+  <h2><span class="n">5</span>架构与评估</h2>
+  <div class="gl"><div class="gl-row"><div class="gl-t">Self-RAG</div><div class="gl-d">训练模型输出反思标记（要不要检索、资料相关吗、句子有依据吗、答案有用吗），用标记控制流程。</div></div><div class="gl-row"><div class="gl-t">Graph RAG</div><div class="gl-d">抽取实体与关系建图，做社区检测与社区摘要，用局部查询/全局查询回答关系型与全局性问题。</div></div><div class="gl-row"><div class="gl-t">社区摘要 / Community Summary</div><div class="gl-d">对一个聚类社区内所有实体关系生成的概述，用于全局查询的 map-reduce 汇总。</div></div><div class="gl-row"><div class="gl-t">Agentic RAG</div><div class="gl-d">把知识库降级为工具之一，由智能体决定调什么、调几次。</div></div><div class="gl-row"><div class="gl-t">Routing</div><div class="gl-d">按请求类型分发到不同处理路径（知识库 / 联网搜索 / 直接回复）。</div></div><div class="gl-row"><div class="gl-t">多跳检索</div><div class="gl-d">上一轮的检索结果作为下一轮的查询输入，解决链式依赖问题。</div></div><div class="gl-row"><div class="gl-t">上下文相关性</div><div class="gl-d">检索到的资料与问题相关的程度。低分说明检索环节有问题。</div></div><div class="gl-row"><div class="gl-t">忠实度 / Faithfulness</div><div class="gl-d">答案的断言中有多少能由资料支持。只衡量「忠于资料」，不衡量资料是否正确。</div></div><div class="gl-row"><div class="gl-t">答案相关性</div><div class="gl-d">答案是否正面回应了用户的问题。常用「从答案反推问题再比相似度」计算。</div></div><div class="gl-row"><div class="gl-t">RAGAS</div><div class="gl-d">开源 RAG 评估框架，提供 context_precision / context_recall / faithfulness / answer_relevancy 四个指标。</div></div><div class="gl-row"><div class="gl-t">LLM 裁判 / LLM as Judge</div><div class="gl-d">用强模型按给定标准批量打分。需先用人工标注的黄金集校准一致性。</div></div></div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>四组术语：基础概念、索引侧、检索侧、架构与评估。</li>
+      <li>索引侧的词决定「能不能查到」，检索侧的词决定「查得准不准」。</li>
+      <li>评估的三个指标分别对应检索、生成、端到端，是定位问题的基本工具。</li>
+    </ol>
+  </div>
+
+  <div class="cite">
+    <b>资料出处</b>
+    术语定义以本课正文为准；RAGAS 指标名与 RRF 公式为通用实现。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

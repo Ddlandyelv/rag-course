@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="limit">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>碎片化的天花板 · RAG 知识体系</title>
+<meta name="description" content="前三部分的所有优化，都在「让检索更准」这条线上。但有一类问题，检索再准也答不了——因为答案不在任何一块文档里。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">11</span><span>第四部分 · Graph RAG</span><span>·</span><span>LIMIT</span></div>
+    <h1>碎片化的天花板</h1>
+    <p class="lede">前三部分的所有优化，都在「让检索更准」这条线上。但有一类问题，检索再准也答不了——因为答案不在任何一块文档里。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：09 重排</span>
+      <span class="pill">读完接：12 知识图谱</span>
+      <span class="pill">约 <b>14</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>Graph RAG 的动机 · 什么时候该换架构</span></div>
+      <div><b>不学卡在哪</b><span>把所有效果问题都归结为「检索不够准」，在全局性问题上反复调参却始终答不好。</span></div>
+      <div><b>它解决什么</b><span>能识别三类「检索救不了」的问题，并判断是否值得上图谱。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>有些问题，检索几块永远答不了</h2>
+  <div class="sec">
+    <p>传统 RAG 的所有优化（改写、混合、重排）都建立在同一个前提上：<b>答案存在于某几块文档里，只要找得够准就能答</b>。</p>    <p>但有一类问题，答案<b>不在任何单独一块里</b>，而在块与块之间的关系里。这类问题无论怎么优化检索都答不好，因为它们的失败不是「没找到」，而是「结构上不存在」。</p>    <div class="q">「请总结过去三年所有项目失败的共同原因。」<br>「张三和李四之间是什么关系？」<br>「这个人的导师的导师是谁？」</div>
+  </div>
+
+  <h2><span class="n">2</span>三类典型失效</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:16%">类型</th><th style="width:34%">问题长什么样</th><th style="width:50%">为什么碎片检索答不了</th></tr></thead>
+      <tbody>
+        <tr><td><b>全局性问题</b></td><td>总结、归纳、趋势、「共同点是什么」</td><td>答案分散在几百块里，任何 top-K 都只覆盖一小部分；模型看到的是局部切片，只能给出局部结论</td></tr>
+        <tr><td><b>多跳问题</b></td><td>「A 的创始人后来创办了什么公司」</td><td>需要先查 A 找到创始人，再拿这个人的名字查第二跳。单次检索做不到这种链式依赖</td></tr>
+        <tr><td><b>关系型问题</b></td><td>「这几个人之间的商业关系网」</td><td>关系没有被显式表达，只隐含在不同文档的叙述里，向量相似度无法捕捉「谁和谁连接」</td></tr>
+      </tbody>
+    </table></div>    <p>第一类最容易被低估。团队常以为「top-K 调大一点就行」，但把 K 从 5 调到 50，覆盖的仍然只是全库的百分之几，而且噪声急剧上升。</p>
+  </div>
+
+  <h2><span class="n">3</span>一个具体的算例</h2>
+  <div class="sec">
+    <p>假设知识库有 <b>5000 块</b>文档，要回答「所有项目的失败原因」。</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:26%">做法</th><th style="width:26%">覆盖范围</th><th style="width:48%">结果</th></tr></thead>
+      <tbody>
+        <tr><td>top-5 检索</td><td>5 / 5000 = 0.1%</td><td>只看到两三个项目，结论以偏概全</td></tr>
+        <tr><td>top-50 检索</td><td>50 / 5000 = 1%</td><td>仍缺 99% 的信息，且噪声挤占上下文</td></tr>
+        <tr><td>全量塞进上下文</td><td>100%</td><td>超出窗口，成本不可接受</td></tr>
+        <tr><td>分层归纳（map-reduce）</td><td>100%</td><td>可行，但要多次调用模型</td></tr>
+      </tbody>
+    </table></div>    <p>最后一行就是 Graph RAG 全局查询的思路：<b>不是「找最相关的几块」，而是「分层概括全部」</b>。这已经超出了「检索」的范畴，属于「结构化归纳」。</p>
+  </div>
+
+  <h2><span class="n">4</span>所以 Graph RAG 不是「更好的 RAG」</h2>
+  <div class="sec">
+    <p>它换了一个问题：<b>不再问「哪几块最相关」，而是问「这些内容之间的结构是什么」</b>。</p>    <p>代价也很明确：</p>    <ul>
+      <li>建图要跑一遍 LLM 做实体关系抽取，成本远高于简单分块；</li>
+      <li>图需要维护，文档更新时要同步更新实体与关系；</li>
+      <li>查询延迟更高（要走图、要做多轮汇总）。</li>
+    </ul>    <p>所以它不是「所有场景都该升级到 Graph RAG」，而是<b>当你的问题类型里有大量全局/多跳/关系查询时</b>才值得。如果 90% 的查询是「某个规定的具体数值」，传统 RAG 又快又准，没必要上图谱。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>传统 RAG 的前提是「答案在某几块文档里」，全局性、多跳、关系型问题不满足这个前提。</li>
+      <li>全局性问题靠调大 top-K 解决不了：覆盖比例仍然极低，噪声还会上升。</li>
+      <li>Graph RAG 换的是问题：不问「哪块相关」，问「结构是什么」。</li>
+      <li>它的建图与维护成本明显更高，只在该类查询占比高时才值得上。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>「总结所有项目失败的共同原因」为什么调大 top-K 也解决不了？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>因为向量库有返回条数上限</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>因为答案分散在全库，top-K 只覆盖极小比例，扩大 K 只是增加噪声</span></button>
+        <button class="opt"><i>C</i><span>因为模型无法总结长文本</span></button>
+      </div>
+      <div class="ex">这已经不是检索精度问题，而是覆盖率问题。要回答全局性问题，必须做「全量分层归纳」而不是「局部精确检索」。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>多跳问题（A 的创始人后来创办了什么）的难点是？</div>
+      <div class="opts">
+        <button class="opt" data-ok="1"><i>A</i><span>一次检索无法完成链式依赖，第二跳需要第一跳的结果作为输入</span></button>
+        <button class="opt"><i>B</i><span>这类问题的文档一定不存在</span></button>
+        <button class="opt"><i>C</i><span>向量模型不支持人名</span></button>
+      </div>
+      <div class="ex">需要「查 A → 得到创始人姓名 → 用姓名再查」这样的串行过程。Agentic RAG 正是为这种多步推理设计的。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>什么情况下不该上 Graph RAG？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>查询里有大量「总结」「关系」类需求</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>绝大多数查询是查某个具体规定或数值</span></button>
+        <button class="opt"><i>C</i><span>知识库超过十万份文档</span></button>
+      </div>
+      <div class="ex">图谱的价值在结构与关系上。如果用户只是问「住宿标准是多少」，传统 RAG 又快又准，上图谱等于为少数场景付出全量成本。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    三类失效场景参考语雀《如何利用知识图谱进行上下文增强》《RAG 关键痛点和解决方案》；覆盖率的算例为本文补充。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

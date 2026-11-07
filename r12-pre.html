@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="pre">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>检索前：改写、拆解、HyDE · RAG 知识体系</title>
+<meta name="description" content="检索不准，往往不是库的问题，是问题本身不适合检索。这一页讲四种把问句「加工」成查询的方法，以及它们的成本与优先级。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">07</span><span>第三部分 · Advanced RAG</span><span>·</span><span>PRE-RETRIEVAL</span></div>
+    <h1>检索前：改写、拆解、HyDE</h1>
+    <p class="lede">检索不准，往往不是库的问题，是问题本身不适合检索。这一页讲四种把问句「加工」成查询的方法，以及它们的成本与优先级。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：04 检索</span>
+      <span class="pill">读完接：08 混合检索</span>
+      <span class="pill">约 <b>17</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>Advanced · 检索前</span></div>
+      <div><b>不学卡在哪</b><span>多轮对话里指代没消解，用户问「它多少钱」时检索直接失效，却以为是向量库不行。</span></div>
+      <div><b>它解决什么</b><span>掌握改写、拆解、HyDE 的适用边界，知道该按什么顺序上这些手段。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>为什么问题需要先「加工」</h2>
+  <div class="sec">
+    <p>用户不会按文档的写法提问。真实提问有三个特征：<b>短、含糊、带上下文</b>。</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:24%">真实提问</th><th style="width:38%">问题在哪</th><th style="width:38%">直接检索会怎样</th></tr></thead>
+      <tbody>
+        <tr><td>「那它多少钱」</td><td>「它」指代上一轮提到的产品</td><td>库里没有「它」，检索不到</td></tr>
+        <tr><td>「A 和 B 哪个好」</td><td>包含两个实体、一个比较动作</td><td>只能命中 A 或 B 的单独介绍，缺对比</td></tr>
+        <tr><td>「报销怎么弄」</td><td>口语化，文档里写的是「费用报销流程」</td><td>字面差距大，向量也可能偏</td></tr>
+        <tr><td>「最近有什么新政策」</td><td>「最近」没有明确时间边界</td><td>可能召回几年前的旧文件</td></tr>
+      </tbody>
+    </table></div>    <p>检索前的优化，就是把这些「不适合检索的问句」改写成「适合检索的查询」。这一步在流水线里最靠前，<b>改动成本最低、收益却最直接</b>。</p>
+  </div>
+
+  <h2><span class="n">2</span>改写：把指代补全</h2>
+  <div class="sec">
+    <p>多轮对话里最常见的问题是省略与指代。改写要做的是<b>结合对话历史，把问句补成完整句</b>：</p>    <pre class="code">历史：用户问「你们最新款手机是什么」→ 助手回答「XX 15」
+本轮：用户问「那它多少钱」
+
+改写后：「XX 15 的价格是多少」</pre>    <p>这一步通常在检索之前用一次轻量 LLM 调用完成，成本很小（几十个 token），但对多轮场景的召回率提升非常明显。</p>    <div class="note"><p>改写的边界：<b>只补水，不添意</b>。如果模型在改写时加了原文没有的限定条件（比如把「多少钱」改成「中国大陆官方售价」），反而会缩小检索范围、漏掉答案。</p></div>
+  </div>
+
+  <h2><span class="n">3</span>拆解：一个复杂问题拆成几个简单问题</h2>
+  <div class="sec">
+    <p>当问题包含多个子目标时，单次检索几乎不可能同时命中所有需要的资料。</p>    <div class="q">「对比去年和今年 A、B 两个产品的销售额变化」</div>    <p>这句里有四个信息需求：去年 A、今年 A、去年 B、今年 B。向量检索只会返回「整体最像」的几块，很可能是四份产品总览，而不是四个具体数字。</p>    <p>拆解后再分别检索，每个子问题都能拿到对应的精确片段，最后汇总生成。</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:22%">拆解方式</th><th style="width:34%">做法</th><th style="width:44%">适合</th></tr></thead>
+      <tbody>
+        <tr><td>并列拆解</td><td>把复合问题拆成互不依赖的子问题</td><td>对比、多实体查询</td></tr>
+        <tr><td>串行拆解</td><td>后一个子问题依赖前一个的答案</td><td>多跳推理（A 的创始人是谁，他后来创办了什么）</td></tr>
+        <tr><td>回溯提问（Step-back）</td><td>先问一个更抽象的上位问题，再回到具体</td><td>需要背景知识的专业问题</td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <h2><span class="n">4</span>HyDE：先编一个假答案，再拿它去找真答案</h2>
+  <div class="sec">
+    <p>这是检索前优化里最反直觉、也最有效的一招。</p>    <p>问题在于<b>问句和文档的表述形态差异太大</b>：用户问「怎么退货」是疑问句，文档里写的是「退货流程：第一步……」是陈述句。两者语义相关，但向量未必靠得近。</p>    <p>HyDE（Hypothetical Document Embeddings）的做法是：</p>    <ol>
+      <li>让模型先<b>编一个假答案</b>（内容可能不完全对）；</li>
+      <li>把这个假答案向量化；</li>
+      <li>用假答案的向量去检索真文档。</li>
+    </ol>    <p>为什么有效？因为假答案是<b>陈述句</b>，它的句式、用词、信息密度都与真文档接近，在向量空间里更容易落在真文档附近。</p>    <div class="note"><p>代价：多一次 LLM 调用（生成假答案通常要几百 token），延迟增加。所以适合「检索质量差、且对延迟不敏感」的场景，不适合高频实时问答。</p></div>
+  </div>
+
+  <h2><span class="n">5</span>这四种手段怎么组合</h2>
+  <div class="sec">
+    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:24%">手段</th><th style="width:38%">解决什么</th><th style="width:24%">成本</th><th style="width:14%">优先级</th></tr></thead>
+      <tbody>
+        <tr><td>查询改写</td><td>指代、省略、口语化</td><td>极低（几十 token）</td><td><b>高</b></td></tr>
+        <tr><td>查询拆解</td><td>多子问题、多跳</td><td>中（一次规划）</td><td>中</td></tr>
+        <tr><td>HyDE</td><td>问句与文档形态差异大</td><td>高（生成整段假答案）</td><td>中低</td></tr>
+        <tr><td>Step-back</td><td>缺少背景知识导致检索太窄</td><td>中</td><td>低</td></tr>
+      </tbody>
+    </table></div>    <p>实践顺序：<b>先上改写</b>（几乎无成本，多轮场景必做），再用评估集判断是否需要拆解，最后才考虑 HyDE。不要一上来把四种全开——叠加的延迟和失败点会很难排查。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>检索前优化的目标是把「用户问句」变成「适合检索的查询」。</li>
+      <li>改写解决指代与省略，是多轮场景必做、成本最低的一步。</li>
+      <li>拆解解决多子问题与多跳推理，代价是多轮检索。</li>
+      <li>HyDE 用「假答案」去匹配真文档，解决问句与文档形态差异，代价是多一次生成。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>「那它多少钱」这类问题直接检索为什么会失败？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>因为句子太短</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>因为「它」在知识库里没有对应内容，指代信息丢失了</span></button>
+        <button class="opt"><i>C</i><span>因为向量模型不支持中文</span></button>
+      </div>
+      <div class="ex">检索是针对「文本内容」的匹配，而「它」这个词本身不携带实体信息。必须结合对话历史把它还原成具体实体，检索才有意义。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>HyDE 有效的核心原因是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>假答案的内容是准确的</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>假答案是陈述句，形态更接近真文档，向量更容易落到文档附近</span></button>
+        <button class="opt"><i>C</i><span>它减少了检索次数</span></button>
+      </div>
+      <div class="ex">HyDE 不依赖假答案的正确性，只用它的「表达形态」。疑问句和陈述句在向量空间里往往有系统性偏移，换成陈述句能绕开这个偏移。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>为什么建议先上查询改写、最后才考虑 HyDE？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>因为 HyDE 效果最差</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>因为改写成本极低且覆盖多轮场景，HyDE 要额外生成整段内容，延迟和失败点都更高</span></button>
+        <button class="opt"><i>C</i><span>因为 HyDE 需要微调模型</span></button>
+      </div>
+      <div class="ex">工程上的原则是「先做便宜且确定的优化」。改写几乎不增加延迟，收益直接；HyDE 增加一次生成长调用，适合在别的手段都不够时再上。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    查询改写与 HyDE 的做法参考语雀《17 种 RAG 优化策略》《RAG 十种优化技巧》；拆解与 Step-back 见《从传统 RAG 到 Agentic RAG 的进阶优化》。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>

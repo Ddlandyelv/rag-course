@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page="mid">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>检索中：混合检索与融合 · RAG 知识体系</title>
+<meta name="description" content="向量懂语义但抓不住型号，BM25 抓得住字面但不懂同义。这一页讲怎么把两条腿绑在一起，以及 RAG Fusion、父子索引两种进阶玩法。">
+<link rel="stylesheet" href="assets/style.css?v=20261107b">
+</head>
+<body>
+<main class="doc" id="doc">
+
+  <header class="lesson-head">
+    <div class="kicker"><span class="sec-no">08</span><span>第三部分 · Advanced RAG</span><span>·</span><span>HYBRID</span></div>
+    <h1>检索中：混合检索与融合</h1>
+    <p class="lede">向量懂语义但抓不住型号，BM25 抓得住字面但不懂同义。这一页讲怎么把两条腿绑在一起，以及 RAG Fusion、父子索引两种进阶玩法。</p>
+    <div class="meta-row">
+      <span class="pill acc">前置：07 检索前</span>
+      <span class="pill">读完接：09 重排</span>
+      <span class="pill">约 <b>18</b> 分钟</span>
+    </div>
+  </header>
+
+  <div class="whybox">
+    <div class="whybox-h">这一页在整条链路上的位置</div>
+    <div class="whybox-g">
+      <div class="wide"><b>对应环节</b><span>Advanced · 检索中</span></div>
+      <div><b>不学卡在哪</b><span>只用向量检索，遇到型号、编号、人名缩写就集体失手，还找不到原因。</span></div>
+      <div><b>它解决什么</b><span>会用混合检索 + RRF 融合，理解父子索引如何解耦检索精度与上下文完整性。</span></div>
+    </div>
+  </div>
+
+  <h2><span class="n">1</span>两条腿走路：向量 + 关键词</h2>
+  <div class="sec">
+    <p>0.4 页说过：向量检索懂语义，但对精确字符串不敏感；BM25 死磕字面，但不懂同义。<b>两者的短板恰好是对方的长板</b>。</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:26%">查询</th><th style="width:30%">向量检索</th><th style="width:26%">BM25</th><th style="width:18%">混合检索</th></tr></thead>
+      <tbody>
+        <tr><td>「怎么退货」</td><td>命中「退货流程」相关段落 ✓</td><td>可能命中「退款」「售后」但排序一般</td><td>两路都命中，排序更稳</td></tr>
+        <tr><td>「A-102 滤芯」</td><td>返回一堆型号相近的结果 ✗</td><td>精确命中 A-102 ✓</td><td>精确项排最前</td></tr>
+        <tr><td>「发票丢了能补吗」</td><td>命中「发票遗失处理」✓</td><td>字面不重合，几乎不命中</td><td>靠向量兜住</td></tr>
+      </tbody>
+    </table></div>    <p>所以工业界的标准做法是：<b>两路并行检索，再融合排序</b>。融合算法最常用的是 <b>RRF</b>（Reciprocal Rank Fusion）。</p>
+  </div>
+
+  <h2><span class="n">2</span>RRF：只看排名，不看分数</h2>
+  <div class="sec">
+    <p>两路检索的分数量纲完全不同（余弦相似度 0–1，BM25 可能几十上百），不能直接相加。RRF 绕开了这个问题——<b>它只用排名，不用分数</b>：</p>    <div class="q">RRF(d) = Σ<sub>i</sub>　1 / (k + rank<sub>i</sub>(d))　　（k 通常取 60）</div>    <p>含义：某文档在每一路里的排名越靠前，贡献越大；在任一路里没出现，就不贡献。最后按总分排序。</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:14%">文档</th><th style="width:20%">向量排名</th><th style="width:20%">BM25 排名</th><th style="width:26%">RRF 得分</th><th style="width:20%">结果</th></tr></thead>
+      <tbody>
+        <tr><td>D1</td><td>1</td><td>—</td><td>1/61 ≈ 0.0164</td><td>第 1</td></tr>
+        <tr><td>D2</td><td>3</td><td>2</td><td>1/63 + 1/62 ≈ 0.0320</td><td>第 1（反超）</td></tr>
+        <tr><td>D3</td><td>—</td><td>1</td><td>1/61 ≈ 0.0164</td><td>并列</td></tr>
+      </tbody>
+    </table></div>    <div class="note"><p>注意 D2：它没有在任一路拿第一，但两路都在前列，RRF 会把它顶上来。<b>这正是融合的价值——两路都认可的，比一路力挺的更可信</b>。</p></div>
+  </div>
+
+  <h2><span class="n">3</span>RAG Fusion：把一次查询变成好几次</h2>
+  <div class="sec">
+    <p>RAG Fusion 在混合检索之上再加一层：<b>让模型把原问题改写成多个不同角度的查询</b>，分别检索，再用 RRF 融合。</p>    <div class="flow"><div class="fn"><b>原问题</b>怎么提高复购率</div><div class="fa">→</div><div class="fn"><b>生成 4 变体</b>留存 / 会员 / 召回 / 频次</div><div class="fa">→</div><div class="fn"><b>各查一次</b>4 组结果</div><div class="fa">→</div><div class="fn"><b>RRF 融合</b>统一排序</div><div class="fa">→</div><div class="fn"><b>取 top-K</b>交给模型</div></div>    <p>它解决的是<b>单一表述的覆盖盲区</b>：用户说「复购率」，文档里可能写的是「留存率」「会员复购」「二次购买」。一次检索只能覆盖一种说法，多查询能把不同说法都捞一遍。</p>    <p>代价很明确：检索次数翻几倍，延迟上升。所以适合<b>离线预处理或对延迟不敏感的问答</b>，不适合高并发实时接口。</p>
+  </div>
+
+  <h2><span class="n">4</span>父子索引：小块检索，大块返回</h2>
+  <div class="sec">
+    <p>02 页提过这个思路，这里给出它的完整形态：</p>    <div class="tw"><table class="tb">
+      <thead><tr><th style="width:22%">层</th><th style="width:36%">粒度</th><th style="width:42%">用途</th></tr></thead>
+      <tbody>
+        <tr><td>子块（child）</td><td>100–200 字，按句子切</td><td>只用来做向量匹配，保证命中精度</td></tr>
+        <tr><td>父块（parent）</td><td>800–1500 字，按段落/小节</td><td>命中后返回给模型，保证上下文完整</td></tr>
+      </tbody>
+    </table></div>    <p>实现要点：向量库里存子块向量，同时存一个 <code>parent_id</code>；检索命中子块后，按 <code>parent_id</code> 取回父块，再<b>按父块去重</b>（多个子块可能属于同一父块）。</p>    <p>这个方案的价值在于：它让「检索精度」和「上下文完整性」不再互相牵制，是两个参数各自调到最优，而不是找一个折中值。</p>
+  </div>
+
+  <h2><span class="n">5</span>检索中还有一类优化：结构化约束</h2>
+  <div class="sec">
+    <p>除了语义，还有很多维度可以用来缩小范围：</p>    <ul>
+      <li><b>时间</b>：只查最近 12 个月，或按时间衰减加权；</li>
+      <li><b>来源类型</b>：只查产品文档，不查会议纪要；</li>
+      <li><b>权限</b>：按用户所属部门过滤（第 03 页的 ACL）；</li>
+      <li><b>文档层级</b>：优先返回「概述」而不是「附录」。</li>
+    </ul>    <p>这些条件都应该<b>下推到检索层</b>，而不是取回结果后再筛。否则会出现「取了 20 条，筛完只剩 1 条」的情况。</p>
+  </div>
+
+  <div class="summary">
+    <h3>本页要点</h3>
+    <ol>
+      <li>向量与 BM25 的短板互补，混合检索是工业界的默认配置。</li>
+      <li>RRF 只用排名不用分数，避免两路分数量纲不一致的问题；两路都在前列的文档会被顶上来。</li>
+      <li>RAG Fusion 用多查询 + RRF 覆盖不同表述，代价是检索次数成倍增加。</li>
+      <li>父子索引把「检索粒度」和「返回粒度」解耦，两个参数各自最优。</li>
+    </ol>
+  </div>
+
+  <h2><span class="n">9</span>自测</h2>
+  <div class="quiz">
+    <div class="qz">
+      <div class="q"><i>Q1</i>混合检索里为什么不能直接把向量分数和 BM25 分数相加？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>因为 BM25 分数不能为负</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>两者量纲完全不同（余弦 0–1，BM25 可达上百），直接相加会让一方主导</span></button>
+        <button class="opt"><i>C</i><span>因为向量分数是浮点数</span></button>
+      </div>
+      <div class="ex">这是典型的「不同评分体系不可比」问题。做法要么归一化后再加权（需要调权），要么像 RRF 那样只用排名，绕开量纲。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q2</i>RRF 中 k=60 的作用是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>限制返回条数</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>压平排名差距，避免第 1 名与第 2 名的分数差过大</span></button>
+        <button class="opt"><i>C</i><span>控制向量维度</span></button>
+      </div>
+      <div class="ex">k 越大，各名次的得分越接近，融合结果越平滑；k 越小，头部排名的优势越明显。60 是经验默认值，实际可按数据调。</div>
+    </div>
+    <div class="qz">
+      <div class="q"><i>Q3</i>父子索引里，向量库里存的是？</div>
+      <div class="opts">
+        <button class="opt"><i>A</i><span>只存父块</span></button>
+        <button class="opt" data-ok="1"><i>B</i><span>子块的向量 + 指向父块的 id</span></button>
+        <button class="opt"><i>C</i><span>父块和子块各存一份向量</span></button>
+      </div>
+      <div class="ex">检索要精度，所以用子块向量匹配；返回要上下文，所以回溯父块。只存子块向量能省大量存储，父块原文按 id 取即可。</div>
+    </div>
+  </div>
+  <div class="cite">
+    <b>资料出处</b>
+    混合检索与 RRF 参考语雀《RAG Fusion 优化策略面试题》《17 种 RAG 优化策略》；父子索引见《RAG 优化相关面试题》。
+  </div>
+
+  <div id="termIndex"></div>
+</main>
+<script src="assets/course.js?v=20261107b"></script>
+</body>
+</html>
